@@ -50,3 +50,7 @@ export const SERVICE = raw.service;
 export const EAT_IN = raw.eatIn;
 export const SHIFT = raw.shift;
 export const SPICE = raw.spice;
+export const MARKET = raw.market;
+export const UPGRADES = raw.upgrades;
+export const PROGRESSION = raw.progression;
+export const REPUTATION = raw.reputation;
