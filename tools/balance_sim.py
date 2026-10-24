@@ -97,6 +97,8 @@ def simulate_day(s, skill, rng):
     capacity *= 1 + 0.25 * (s.val("seating") - 1)  # longer patience => fewer walkouts
     capacity *= 1 + 0.5 * s.val("helper")
     capacity += s.val("rack") * 3  # rack lets you pre-cook for the rush
+    # eat-in seats: seated customers order extra (approximated as more revenue per order)
+    seat_bonus = 1 + 0.25 * B["eatIn"]["extraOrderChance"] * min(1.0, s.val("tables") / 6)
 
     revenue = tips = ingredient = 0.0
     served = walked = skewers = perfects = 0
@@ -112,7 +114,7 @@ def simulate_day(s, skill, rng):
             q, burnt, perf = item_quality(d, skill, evenness)
             # burnt skewers are remade: pay ingredient again
             ingredient += d["cost"] * (1 + burnt)
-            revenue += d["price"] * price_mult
+            revenue += d["price"] * price_mult * seat_bonus
             q_sum += q
             perfects += perf
         q_avg = q_sum / len(picks)
@@ -154,7 +156,7 @@ def buy_upgrades(s, last_profit):
             if lvl >= len(u["costs"]) or s.level < u.get("unlockLevel", 1):
                 continue
             prio = {"grillSize": 3, "powder": 2, "sign": 2, "seating": 1.5, "grillType": 1.5,
-                    "rack": 1, "fridge": 0.8, "helper": 1.2}[uid]
+                    "rack": 1, "fridge": 0.8, "helper": 1.2, "tables": 1.5}[uid]
             options.append((prio / u["costs"][lvl], u["costs"][lvl], "upg", uid))
         for iid, d in ITEMS.items():
             if iid not in s.items and s.level >= d["unlockLevel"]:

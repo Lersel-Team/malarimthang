@@ -116,6 +116,46 @@ and feeds the shop rating.
 **Rating ⭐ (1–5):** rolling average of the last 40 customers. It scales customer spawn rate
 (×0.6 at 1⭐, ×1.0 at 3⭐, ×1.45 at 5⭐). Walk-outs (patience runs out) hurt the most.
 
+### 6.1 Shop view: customers walk, queue, sit and eat
+The top part of the shift screen is a living shop, not just order bubbles. It uses a side-on 2.5D view with 2–3 depth rows, which is cheaper to draw than isometric and readable at 360 px.
+
+```
+ ┌────────────────────────────────────┐
+ │  street ← walkers pass by →  🛵     │  passers-by; some turn in (spawn)
+ │  [ป้ายไฟ]  ร้านหม่าล่า   💡💡💡       │  decor slots on the front / awning
+ │  🪑🍽 🪑🍽   🪑🍽         🧍🧍🧍 ←queue │  tables (eat-in) · queue at the counter
+ ├────────────────────────────────────┤
+ │  order tickets                      │
+ │  GRILL · cooler · shaker · bin      │  (Sprint 1 grill)
+ └────────────────────────────────────┘
+```
+
+- **Customer flow:** walk in from the street → queue at the counter → order bubble → choose **ใส่ถุงกลับบ้าน (takeaway)** or **นั่งกินที่ร้าน (eat in)** → get served.
+  - Takeaway customers leave immediately and pay.
+  - Eat-in customers walk to a free seat, eat for 4–6 s, leave money on the table (tap to collect; it auto-collects after 16 s), then leave.
+- **Seats matter:**
+  - Eat-in customers spend more: 25% chance of a **สั่งเพิ่ม** (extra order) while seated, and they tip better.
+  - If no seat is free, an eat-in customer waits a little longer or turns to takeaway at lower satisfaction.
+  - Each archetype has its own eat-in rate: families and night-owls like to sit, students and office workers mostly take away.
+- **Ambient life:** passers-by who don't stop, a cat, motorbikes, rain on rain nights. Customers have small idle animations and emoji reactions over their heads.
+- **Shop layout mode** (between shifts): tap a table or decor slot to buy, upgrade or swap it. This uses fixed slots, not free placement. That keeps it simple on a phone and avoids blocked-path problems.
+
+### 6.2 Seats & decorations (stat upgrades)
+Seat and decor upgrades are part of the upgrade shop (§8.1), but they're **visible in the shop**, so progress shows on screen.
+
+| Thing | Levels / options | Stat effect |
+|---|---|---|
+| **จำนวนโต๊ะ** tables | 0 → 2 → 4 → 6 → 8 seats | eat-in capacity |
+| **เกรดที่นั่ง** seat grade | เก้าอี้พลาสติก → ม้านั่งไม้ → โต๊ะพับมีร่ม → โต๊ะไม้ไฟวิบวับ | patience of seated/queueing customers ×1.0 → ×1.45, eat-in tip + |
+| **ป้ายไฟ** neon sign | 3 levels | customers ×1.1 → ×1.35 |
+| **ไฟประดับ** string lights | 1 | rating +0.1 floor, nicer night look |
+| **พัดลม** fan | 2 levels | patience +10% / +20% (stacks with seats) |
+| **ลำโพงเพลง** speaker | 1 | eat-in time −15% (faster table turnover) |
+| **กระถางต้นไม้ / แมวกวัก** plants / lucky cat | cosmetic + small | tip +3% / +5% |
+| **ป้ายเมนูใหญ่** menu board | 1 | order size +1 for 30% of customers |
+
+Rule: every decor item has **one stat and a visible look**. Stats are shown on the card ("ลูกค้า +10%"). Effects are global in v1. Spatial effects like Soi Sizzle's "fan helps tables nearby" are a candidate for later.
+
 ## 7. Economy & ecosystem
 
 ### 7.1 Money flow
@@ -193,11 +233,12 @@ Skill roughly doubles income without blocking weaker players.
 ## 9. Screens & UX
 1. **Boot/cover:** title, loading lines ("กำลังก่อถ่าน...", "หั่นหมูสามชั้น..."), *เข้าด้วย Google* / *เล่นแบบ Guest* (Google arrives in Sprint 7).
 2. **Market:** item cards with today's price, stock owned, spoil timer, "ซื้อเหมือนเมื่อวาน".
-3. **Shift:** top = street with customers and order bubbles; middle = order ticket rail (3–4 tickets); bottom = grill + cooler + shaker + bin. Clock and money in the HUD.
+3. **Shift:** top = shop view (§6.1) with walking, queueing and seated customers; middle = order ticket rail (3–4 tickets); bottom = grill + cooler + shaker + bin. Clock and money in the HUD.
 4. **Summary:** receipt-style breakdown, stars, 1–3 customer reviews, XP bar.
 5. **Upgrade shop:** tabs เตา / เมนู / ร้าน / ทำเล, with the next recommended goal highlighted.
-6. **Settings:** music/SFX, flip ding, doneness ring, language (TH first, EN later).
-7. **Tutorial:** day 1 is scripted: 1 customer, 1 fish ball, then flip, then serve.
+6. **Shop layout mode:** fixed table and decor slots; tap to buy, upgrade or swap (§6.2).
+7. **Settings:** music/SFX, flip ding, doneness ring, language (TH first, EN later).
+8. **Tutorial:** day 1 is scripted: 1 customer, 1 fish ball, then flip, then serve.
 
 ## 10. Art & audio direction
 - Pixel-ish 2D, warm night palette (deep purple sky, orange lamp light, red mala powder), as cozy as Soi Sizzle's lofi feel.

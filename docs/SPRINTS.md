@@ -43,9 +43,11 @@ Goal: one screen, a grill, skewers you can cook, flip and burn. No customers yet
 ## Sprint 2 — Customers & a full shift
 Goal: a 3-minute shift that ends with a money total.
 - S2-1 `core-dev`: orders, archetypes, patience, satisfaction, tips, rating (pure + tested).
-- S2-2 `engine-dev`: street strip with customers + order bubbles, ticket rail, drag skewer → ticket, shaker seasoning, serve, walk-outs.
+- S2-2 `engine-dev`: **shop view** (GDD §6.1): side-on 2.5D shop on the top of the screen, customers walk in from the street, queue, order bubble, takeaway vs eat-in, walk to a seat, eat, leave money on the table (tap/auto-collect), walk out. Starts with 2 plastic seats. Ambient passers-by.
+- S2-5 `engine-dev`: ticket rail, drag skewer → ticket, shaker seasoning, serve, walk-outs.
 - S2-3 `engine-dev`: HUD (clock 18:00→24:00, money, ⭐), end-of-shift.
 - S2-4 `qa`: Playwright smoke: boot → shift → end.
+- S2-6 `art-audio`: procedural customer sprites (5 archetypes, walk/idle/eat/happy/angry), plastic chairs, shop front.
 
 **Done when:** a full shift is playable start to finish with real orders.
 
@@ -61,6 +63,7 @@ Goal: day after day, with money that persists.
 ## Sprint 4 — Upgrades & progression
 - S4-1 `core-dev`: upgrade effects, item/location unlocks, XP/levels.
 - S4-2 `engine-dev`: Upgrade shop (tabs, recommended next goal), level-up moment.
+- S4-5 `engine-dev`: **shop layout mode** between shifts: tap table/decor slots to buy, upgrade or swap; tables, seat grades and 7 decor items (GDD §6.2), each with one visible stat.
 - S4-3 `engine-dev`: gas grill knob, fan, holding rack, helper auto-flip.
 - S4-4 `balance`: tune to the GDD §8.3 targets, write `docs/balance-report.md`.
 
