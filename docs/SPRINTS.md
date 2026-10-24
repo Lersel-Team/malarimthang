@@ -31,7 +31,7 @@ The PM reviews every agent's output (diff + tests + a playtest) before the sprin
 - [x] Sprint plan (this file)
 - [x] Owner review of GDD
 
-## Sprint 1 — Grill prototype ("is flipping fun?") 🟡 built, awaiting owner playtest
+## Sprint 1 — Grill prototype ("is flipping fun?") ✅
 Goal: one screen, a grill, skewers you can cook, flip and burn. No customers yet.
 - [x] S1-1 `engine-dev`: Vite + Phaser 3 + TS scaffold, portrait 360×740 scaling, PWA manifest stub, ESLint/Prettier, `npm run dev/build/test`.
 - [x] S1-2 `core-dev`: `src/core/cooking.ts`: two-sided skewer model, zones, quality, heat per slot, flare-ups. Vitest coverage for every zone boundary.
@@ -40,16 +40,16 @@ Goal: one screen, a grill, skewers you can cook, flip and burn. No customers yet
 
 **Done when:** you can cook 4 skewers at once on a phone, and burning is possible and obvious. Owner playtest: "is it fun to flip?"
 
-## Sprint 2 — Customers & a full shift
+## Sprint 2 — Customers & a full shift ✅ (S2-4 Playwright smoke moved to Sprint 3)
 Goal: a 3-minute shift that ends with a money total.
-- S2-1 `core-dev`: orders, archetypes, patience, satisfaction, tips, rating (pure + tested).
-- S2-2 `engine-dev`: **shop view** (GDD §6.1): side-on 2.5D shop on the top of the screen, customers walk in from the street, queue, order bubble, takeaway vs eat-in, walk to a seat, eat, leave money on the table (tap/auto-collect), walk out. Starts with 2 plastic seats. Ambient passers-by.
-- S2-5 `engine-dev`: ticket rail, drag skewer → ticket, shaker seasoning, serve, walk-outs.
-- S2-3 `engine-dev`: HUD (clock 18:00→24:00, money, ⭐), end-of-shift.
+- [x] S2-1 `core-dev`: orders, archetypes, patience, satisfaction, tips, rating (pure + tested).
+- [x] S2-2 `engine-dev`: **shop view** (GDD §6.1): side-on 2.5D shop on the top of the screen, customers walk in from the street, queue, order bubble, takeaway vs eat-in, walk to a seat, eat, leave money on the table (tap/auto-collect), walk out. Starts with 2 plastic seats. Ambient passers-by.
+- [x] S2-5 `engine-dev`: ticket rail, drag skewer → ticket, shaker seasoning, serve, walk-outs.
+- [x] S2-3 `engine-dev`: HUD (clock 18:00→24:00, money, ⭐), end-of-shift.
 - S2-4 `qa`: Playwright smoke: boot → shift → end.
-- S2-7 `engine-dev`: **oil + mala sauce brushes** on the grill (GDD §4.5): rules in cooking.ts + tests, brush pot UI with swipe-to-brush, sheen/glaze visuals, brush SFX.
-- S2-8 PM: customer names in Thai script, 10% foreign (done).
-- S2-6 `art-audio`: procedural customer sprites (5 archetypes, walk/idle/eat/happy/angry), plastic chairs, shop front.
+- [x] S2-7 `engine-dev`: **oil + mala sauce brushes** on the grill (GDD §4.5): rules in cooking.ts + tests, brush pot UI with swipe-to-brush, sheen/glaze visuals, brush SFX.
+- [x] S2-8 PM: customer names in Thai script, 10% foreign (done).
+- [x] S2-6 `art-audio`: procedural customer sprites (5 archetypes, walk/idle/eat/happy/angry), plastic chairs, shop front.
 
 **Done when:** a full shift is playable start to finish with real orders.
 
@@ -59,6 +59,7 @@ Goal: day after day, with money that persists.
 - S3-2 `engine-dev`: Market scene, Summary scene (receipt, reviews), day counter.
 - S3-3 `core-dev`: `SaveRepository` + `LocalSave` with schema versioning/migrations.
 - S3-5 `engine-dev`: **renameable shop**: name your stall on first launch (default "หม่าล่าริมทาง"), rename by tapping the sign; shown on the shop sign, receipt and boot screen. Saved with the game.
+- S3-6 `qa`: Playwright smoke (boot → shift → serve → receipt) using `?speed=`; carried over from S2-4.
 - S3-4 `balance`: hook the simulator to the same TS rules (or port them), and report the drift between sim and game.
 
 **Done when:** you can play 5 days in a row, close the tab, and continue.
