@@ -17,6 +17,15 @@
     "flareHeatMult": 2.2,
     "flareDurationSec": 2.0,
     "rawPenaltyQuality": 0.0,
+    "brush": {
+      "dryMult": 0.8,
+      "unsaucedMult": 0.9,
+      "oilDripSec": 1.5,
+      "oilDripFlareMult": 3,
+      "oilDripBaseChance": 0.04,
+      "earlySauceBurnMarginMult": 0.5,
+      "brushIdleDropSec": 4
+    },
     "quality": { "perfect": 1.0, "ok": 0.7, "slightlyBurnt": 0.4, "burnt": 0.0, "raw": 0.0 }
   },
   "spice": {

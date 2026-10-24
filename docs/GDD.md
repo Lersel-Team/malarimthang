@@ -78,6 +78,19 @@ and that is what makes items feel different.
 - **Gas grill (upgrade):** even heat, plus a global knob (low/med/high) instead of fanning.
 - **ตะแกรงพักไม้ (holding rack, upgrade):** park cooked skewers without burning so you can pre-cook for the rush.
 
+### 4.5 Brushing: oil and mala sauce
+Real mala skewers get brushed on the grill. Two brushes sit in a pot beside the grill.
+
+| Brush | When | Reward | Risk |
+|---|---|---|---|
+| **แปรงน้ำมัน oil** | any time on the grill (best early) | without oil the skewer is "แห้ง" (dry): quality ×0.8 | oil drips: for 1.5 s that skewer can flare (fatty ×3 chance, lean items get the fatty base chance) |
+| **แปรงซอส mala sauce** | once **both sides are at least almost-cooked** | sauce glaze: without it quality ×0.9 | sauce on a still-raw side burns: that skewer's charred→burnt margin is halved |
+
+`quality = zoneAvg × (oiled ? 1 : 0.8) × (sauced well ? 1 : 0.9)`, so a perfect, oiled, well-sauced skewer = 1.0.
+Controls: tap a brush to pick it up (it follows the finger), then tap or **swipe across several skewers** to brush them all. While holding a brush, a tap brushes instead of flipping. Tap the pot again, or wait 4 s idle, to put it down.
+Look: oil = glossy sheen; sauce = red-brown glaze that darkens if burnt. Sound: soft wet brush strokes.
+Order of a skewer's life: **place → oil → cook side A → flip → cook side B → sauce → onto the ticket → mala powder (per ticket) → serve.**
+
 ### 4.4 Feedback (juice)
 Sizzle loudness and pitch follow the down side's `c`. A "ready to flip" ding plays at perfect (can be turned off in settings).
 Steam particles when perfect, smoke when charred, flame sprite on flare. Burnt skewer: small sad "ฟู่" sound.

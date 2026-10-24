@@ -47,6 +47,8 @@ Goal: a 3-minute shift that ends with a money total.
 - S2-5 `engine-dev`: ticket rail, drag skewer → ticket, shaker seasoning, serve, walk-outs.
 - S2-3 `engine-dev`: HUD (clock 18:00→24:00, money, ⭐), end-of-shift.
 - S2-4 `qa`: Playwright smoke: boot → shift → end.
+- S2-7 `engine-dev`: **oil + mala sauce brushes** on the grill (GDD §4.5): rules in cooking.ts + tests, brush pot UI with swipe-to-brush, sheen/glaze visuals, brush SFX.
+- S2-8 PM: customer names in Thai script, 10% foreign (done).
 - S2-6 `art-audio`: procedural customer sprites (5 archetypes, walk/idle/eat/happy/angry), plastic chairs, shop front.
 
 **Done when:** a full shift is playable start to finish with real orders.
@@ -56,6 +58,7 @@ Goal: day after day, with money that persists.
 - S3-1 `core-dev`: market (packs, daily jitter, stock, spoilage), daily costs, loan safety net.
 - S3-2 `engine-dev`: Market scene, Summary scene (receipt, reviews), day counter.
 - S3-3 `core-dev`: `SaveRepository` + `LocalSave` with schema versioning/migrations.
+- S3-5 `engine-dev`: **renameable shop**: name your stall on first launch (default "หม่าล่าริมทาง"), rename by tapping the sign; shown on the shop sign, receipt and boot screen. Saved with the game.
 - S3-4 `balance`: hook the simulator to the same TS rules (or port them), and report the drift between sim and game.
 
 **Done when:** you can play 5 days in a row, close the tab, and continue.
