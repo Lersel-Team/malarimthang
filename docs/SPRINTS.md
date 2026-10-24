@@ -83,7 +83,9 @@ Goal: customers pick skewers from your display box into a numbered glass; you co
 ## Sprint 6 — Upgrades & progression
 - S6-1 `core-dev`: upgrade effects (incl. displayBox, tray, fryer, batter, grill, rack, fridge, powder, seating, sign, helper), item/location unlocks, XP/levels.
 - S6-2 `engine-dev`: **upgrade shop** with tabs เตา / เมนู / ร้าน / ทำเล, **new menu unlocks** (new skewers, fried items, new sauces), recommended next goal, readable lock reasons, level-up moment.
-- S6-3 `engine-dev`: gas grill knob, fan, holding rack, helper auto-flip.
+- S6-3 `engine-dev`: gas grill knob, fan, holding rack.
+- S6-6 `core-dev`: **staff system** (GDD §8.4): candidates, hiring, traits, XP/levels, wages, timing-error cooking bot (reuses `cooking.ts`), forgetting, quitting/poaching + tests; removes the old `helper` upgrade.
+- S6-7 `engine-dev`: staff UI: applicants panel at the market, staff cards (level, trait, wage, XP bar), staff characters working at their grill slots, take-over tap, raise/course buttons, end-of-day staff lines on the receipt.
 - S6-4 `engine-dev`: **shop layout mode** between shifts: tap table/decor slots to buy, upgrade or swap; tables, seat grades and 7 decor items (GDD §6.2).
 - S6-5 `balance`: tune to the GDD §8.3 targets; sim ↔ game drift report (carried over from S3-4).
 

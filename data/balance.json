@@ -968,5 +968,96 @@
     "skipPatienceDrainMult": 1.3,
     "inOrderTipBonus": 0.05,
     "maxCups": 4
+  },
+  "staff": {
+    "_comment": "Hirable cooks. Experience (level 1-10) sets how precisely they time flips and pulls; quality then follows from the normal cooking zones. Wage per shift = wageBase + wagePerLevel*level, paid at endDay.",
+    "roles": [
+      "griller",
+      "fryer"
+    ],
+    "maxLevel": 10,
+    "xpPerSkewer": 1,
+    "xpForLevel": "round(20 * L^1.5)",
+    "wageBase": 40,
+    "wagePerLevel": 22,
+    "timingSigmaSec": {
+      "base": 1.6,
+      "perLevel": 0.15,
+      "min": 0.15
+    },
+    "slotsByLevel": [
+      [
+        1,
+        1
+      ],
+      [
+        5,
+        2
+      ],
+      [
+        9,
+        3
+      ]
+    ],
+    "brushFromLevel": {
+      "oil": 3,
+      "sauce": 5
+    },
+    "forgetFlipChance": {
+      "base": 0.25,
+      "perLevel": 0.025
+    },
+    "staffCapByUpgrade": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "candidates": {
+      "perDay": 3,
+      "levelRange": "1..(shopLevel/2+1)",
+      "hireFee": "wage*2",
+      "refreshOnDay": true
+    },
+    "traits": {
+      "diligent": {
+        "th": "ขยัน",
+        "xpMult": 1.5
+      },
+      "calm": {
+        "th": "ใจเย็น",
+        "sigmaMult": 0.8,
+        "speedMult": 0.9
+      },
+      "quick": {
+        "th": "มือไว",
+        "speedMult": 1.25,
+        "sigmaMult": 1.1
+      },
+      "careless": {
+        "th": "ขี้ลืม",
+        "forgetMult": 1.6,
+        "wageMult": 0.8
+      },
+      "veteran": {
+        "th": "มือเก๋า",
+        "startLevelBonus": 2,
+        "wageMult": 1.2
+      }
+    },
+    "training": {
+      "course": {
+        "cost": "wage*3",
+        "xp": "half a level",
+        "instant": true
+      }
+    },
+    "quitIf": [
+      "unpaidWages",
+      "poachedAtLevel7NoRaise"
+    ],
+    "raise": {
+      "wageMult": 1.15
+    }
   }
 }

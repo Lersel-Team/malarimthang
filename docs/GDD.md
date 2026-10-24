@@ -268,6 +268,22 @@ Levels gate unlocks, money buys them, so both skill and saving matter.
 The grill is still the main bottleneck for average and weak players. Strong players run out of customers first, which is the signal to move location or buy the neon sign.
 **Open tuning item:** Khao San/Yaowarat still come late. Revisit after real playtests.
 
+### 8.4 Staff: hire grillers (and fryers later)
+Owner request 2026-10-24: **hire cooks who each have their own experience; quality depends on it.** This replaces the single "ลูกมือช่วยพลิก" helper upgrade (kept in data until Sprint 6 swaps it out).
+
+**Hiring (ป้ายรับสมัคร):** each morning the market screen shows `candidates.perDay` (3) applicants. Each has a Thai name (10% foreign, same pool as customers), a **level** (1 to ~shopLevel/2+1), a **trait**, a daily wage and a one-time hire fee (2× wage). The number of staff you can employ is capped by the **ครัวหลังร้าน** upgrade (1 → 3). Roles: **ลูกมือย่าง** (griller) now, **ลูกมือทอด** (fryer cook) once the fryer exists.
+**Experience (1–10):** a cook earns XP per skewer cooked (diligent ×1.5) and levels up on the job. A short paid course (3× wage, instant, no real-time wait) gives half a level.
+**What experience changes:** staff are not instant robots. They run the same two-sided cooking model as the player, with human error:
+- **Timing precision:** they flip and pull at the ideal moment plus a random error with σ = 1.6 − 0.15·L seconds (min 0.15 s). A level-1 cook often serves raw, charred or burnt skewers; a level-10 cook almost always hits "perfect". Quality is just the normal zone result, so the burn/raw rules, wasted skewers and tips all stay consistent.
+- **Forgetting:** each skewer has a `0.25 − 0.025·L` chance that the cook forgets to flip until you tap them.
+- **Capacity:** they cook 1 skewer at a time at L1, 2 from L5, 3 from L9.
+- **Brushing:** they oil from L3 and sauce from L5, otherwise the skewer is served dry or unsauced (×0.8 / ×0.9).
+**Traits:** ขยัน (XP ×1.5), ใจเย็น (σ ×0.8, 10% slower), มือไว (25% faster, σ ×1.1), ขี้ลืม (forgets ×1.6, wage −20%), มือเก๋า (starts +2 levels, wage +20%).
+**Cost:** wage per shift = 40 + 22·level (a level-5 cook = 150 ฿), paid at the end of the day. A veteran is worth it only if the shop sells enough.
+**How they work:** staff take skewers from the oldest glass on the kitchen rail (see §6.3) and cook them on the slots assigned to them; the player can tap a staff-cooked skewer to take over (steal it back) or fix a mistake. Their slots are marked with their face. Customers' glasses are returned to the rail when cooked.
+**Drama (light):** an unpaid cook quits; at level 7+ a rival stall may poach them unless you give a raise (+15% wage). A cook with a bad shift says a Thai excuse line; a great shift gets a cheer.
+**Why it fits the pillars:** it gives a long-term money sink (wages) that scales the grill past one player's two hands, rewards reading candidates (cheap veteran vs. eager rookie), and keeps the player's own skill relevant for premium items like wagyu.
+
 ## 9. Screens & UX
 1. **Boot/cover:** title, loading lines ("กำลังก่อถ่าน...", "หั่นหมูสามชั้น..."), *เข้าด้วย Google* / *เล่นแบบ Guest* (Google arrives in Sprint 7).
 2. **Market:** item cards with today's price, stock owned, spoil timer, "ซื้อเหมือนเมื่อวาน".
