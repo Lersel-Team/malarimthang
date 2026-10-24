@@ -29,14 +29,14 @@ The PM reviews every agent's output (diff + tests + a playtest) before the sprin
 - [x] Balance data → `data/balance.json`
 - [x] Economy simulator → `tools/balance_sim.py`
 - [x] Sprint plan (this file)
-- [ ] **Owner review of GDD** ← we are here
+- [x] Owner review of GDD
 
-## Sprint 1 — Grill prototype ("is flipping fun?")
+## Sprint 1 — Grill prototype ("is flipping fun?") 🟡 built, awaiting owner playtest
 Goal: one screen, a grill, skewers you can cook, flip and burn. No customers yet.
-- S1-1 `engine-dev`: Vite + Phaser 3 + TS scaffold, portrait 360×740 scaling, PWA manifest stub, ESLint/Prettier, `npm run dev/build/test`.
-- S1-2 `core-dev`: `src/core/cooking.ts`: two-sided skewer model, zones, quality, heat per slot, flare-ups. Vitest coverage for every zone boundary.
-- S1-3 `engine-dev`: grill scene: 4 slots with heat glow, cooler with 4 starter items, tap to place, tap to flip, drag to bin, placeholder doneness colors, doneness ring.
-- S1-4 `art-audio`: placeholder skewer sprites (5 doneness frames × 4 items), sizzle loop + flip SFX (CC0).
+- [x] S1-1 `engine-dev`: Vite + Phaser 3 + TS scaffold, portrait 360×740 scaling, PWA manifest stub, ESLint/Prettier, `npm run dev/build/test`.
+- [x] S1-2 `core-dev`: `src/core/cooking.ts`: two-sided skewer model, zones, quality, heat per slot, flare-ups. Vitest coverage for every zone boundary.
+- [x] S1-3 `engine-dev`: grill scene: 4 slots with heat glow, cooler with 4 starter items, tap to place, tap to flip, drag to bin, placeholder doneness colors, doneness ring.
+- [x] S1-4 `art-audio`: placeholder skewer sprites (5 doneness frames × 4 items), sizzle loop + flip SFX (CC0).
 
 **Done when:** you can cook 4 skewers at once on a phone, and burning is possible and obvious. Owner playtest: "is it fun to flip?"
 
