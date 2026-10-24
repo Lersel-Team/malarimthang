@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { COLORS, GAME_H, GAME_W } from '../config';
-import { COOKING, ITEMS, ITEM_BY_ID, LOCATIONS } from '../data/balance';
+import { COOKING, ITEM_BY_ID, LOCATIONS, PROGRESSION, UPGRADES } from '../data/balance';
+import type { ShiftResult } from '../core/economy';
+import { session } from '../session';
+import { renameShop } from './nameInput';
 import {
   createGrill,
   extinguish,
@@ -26,8 +29,6 @@ import { BODY_H, FONT, drawBody, drawIcon, drawIndicators, makeTextures, mix } f
 // Dev only: ?speed=0.3 slows the game for QA/playtests, ?speed=3 fast-forwards. Ignored in production builds.
 const DEV_SPEED = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('speed')) || 1 : 1;
 
-/** Number of grill slots. 4 for Sprint 1; 6-12 also lay out (6 per row). */
-export const SLOT_COUNT = 4;
 const HEAT_EVENNESS = 0.55;
 const DRAG_PX = 10;
 
@@ -43,7 +44,13 @@ const HUD_H = 28;
 const CARD_Y = SHOP_H + 4, CARD_W = 112, CARD_H = 122, CARD_GAP = 4, CARD_X0 = 8;
 const cardX = (i: number) => CARD_X0 + i * (CARD_W + CARD_GAP);
 const SHAKER = { dx: 4, dy: 78, w: 46, h: 26 };
-const MENU = ITEMS.filter((i) => i.unlockLevel === 1).slice(0, 4);
+
+/** Level index into an upgrade's values table (clamped). */
+function upgradeValue(id: string, level: number): number {
+  const u = UPGRADES.find((x) => x.id === id);
+  if (!u) return 0;
+  return u.values[Math.max(0, Math.min(u.values.length - 1, level))];
+}
 
 interface Card {
   bg: Phaser.GameObjects.Graphics;
@@ -87,7 +94,6 @@ export class ShiftScene extends Phaser.Scene {
   private hudMoney!: Phaser.GameObjects.Text;
   private hudStar!: Phaser.GameObjects.Text;
   private hudCombo!: Phaser.GameObjects.Text;
-  private overlay: Phaser.GameObjects.GameObject[] = [];
   private powder!: Phaser.GameObjects.Particles.ParticleEmitter;
   private stats = { perfect: 0, ok: 0, burnt: 0, bin: 0 };
   private ringOn = true;
@@ -114,17 +120,33 @@ export class ShiftScene extends Phaser.Scene {
   private splat!: Phaser.GameObjects.Particles.ParticleEmitter;
   private embers: { x: number; y: number; r: number; ph: number }[][] = [];
   private fanning = new Set<number>();
+  private n = 4; // grill slots
+  private menu: string[] = [];
+  private stock: Record<string, number> = {};
+  private sold: Record<string, number> = {};
+  private wasted: Record<string, number> = {};
+  private perfects = 0;
+  private paused = false;
+  private coolerCells: { id: string; x: number; y: number; w: number; h: number; icon: Phaser.GameObjects.Graphics; count: Phaser.GameObjects.Text }[] = [];
 
   constructor() {
     super('Shift');
   }
 
   // ---- geometry ----
-  private cols = Math.min(SLOT_COUNT, 6);
-  private rows = Math.ceil(SLOT_COUNT / 6);
-  private cellW = GRID_W / this.cols;
-  private cellH = GRID_H / this.rows;
-  private coalH = this.rows === 1 ? 30 : 20;
+  private cols = 4;
+  private rows = 1;
+  private cellW = GRID_W / 4;
+  private cellH = GRID_H;
+  private coalH = 30;
+  /** 6 per row then wrap; columns balanced across rows (8 -> 2x4, 10 -> 2x5, 12 -> 2x6). */
+  private setGeometry() {
+    this.rows = Math.ceil(this.n / 6);
+    this.cols = Math.ceil(this.n / this.rows);
+    this.cellW = GRID_W / this.cols;
+    this.cellH = GRID_H / this.rows;
+    this.coalH = this.rows === 1 ? 30 : 20;
+  }
   private cell(i: number) {
     const col = i % this.cols, row = Math.floor(i / this.cols);
     return { x: GRID_X + col * this.cellW, y: GRID_Y + row * this.cellH, w: this.cellW, h: this.cellH };
@@ -138,27 +160,40 @@ export class ShiftScene extends Phaser.Scene {
   }
 
   create() {
-    this.cols = Math.min(SLOT_COUNT, 6);
-    this.rows = Math.ceil(SLOT_COUNT / 6);
-    this.cellW = GRID_W / this.cols;
-    this.cellH = GRID_H / this.rows;
-    this.coalH = this.rows === 1 ? 30 : 20;
+    const st = session.s;
+    this.n = Math.max(1, Math.min(12, Math.round(upgradeValue('grillSize', st.upgrades.grillSize ?? 0))));
+    this.setGeometry();
+    this.stock = { ...st.stock };
+    this.menu = st.unlockedItems.filter((id) => ITEM_BY_ID[id] && (this.stock[id] ?? 0) > 0);
+    this.sold = {};
+    this.wasted = {};
+    this.perfects = 0;
+    this.paused = false;
+    const seats = upgradeValue('tables', st.upgrades.tables ?? 0);
 
     this.sfx = (this.registry.get('sfx') as Sfx | undefined) ?? new Sfx();
     this.registry.set('sfx', this.sfx);
     this.sfx.stopAll();
 
-    this.grill = createGrill(SLOT_COUNT, HEAT_EVENNESS, Math.random);
-    this.views = Array(SLOT_COUNT).fill(null);
-    this.flames = Array(SLOT_COUNT).fill(null);
-    this.smokeT = Array(SLOT_COUNT).fill(0);
-    this.lastSizzle = Array(SLOT_COUNT).fill(-1);
+    this.grill = createGrill(this.n, upgradeValue('grillType', st.upgrades.grillType ?? 0) || HEAT_EVENNESS, Math.random);
+    this.views = Array(this.n).fill(null);
+    this.flames = Array(this.n).fill(null);
+    this.smokeT = Array(this.n).fill(0);
+    this.lastSizzle = Array(this.n).fill(-1);
     this.gestures.clear();
     this.fanning.clear();
     this.over = false;
-    this.overlay = [];
     this.cards = [];
-    this.shift = new Shift({ location: LOCATIONS[0], menu: MENU.map((m) => m.id), seats: 2, rating: 3, rng: Math.random });
+    this.shift = new Shift({
+      location: LOCATIONS.find((l) => l.id === st.location) ?? LOCATIONS[0],
+      menu: this.menu,
+      seats,
+      rating: st.rating,
+      priceMult: upgradeValue('powder', st.upgrades.powder ?? 0) || 1,
+      patienceMult: upgradeValue('seating', st.upgrades.seating ?? 0) || 1,
+      spawnMult: upgradeValue('sign', st.upgrades.sign ?? 0) || 1,
+      rng: Math.random,
+    });
     this.stats = { perfect: 0, ok: 0, burnt: 0, bin: 0 };
     this.waterMode = false;
     this.brushMode = null;
@@ -167,7 +202,7 @@ export class ShiftScene extends Phaser.Scene {
 
     makeTextures(this);
     this.drawLowerBackdrop();
-    this.shopView = new ShopView(this, 0, 0, GAME_W, SHOP_H, { seats: 2 });
+    this.shopView = new ShopView(this, 0, 0, GAME_W, SHOP_H, { seats, shopName: st.shopName });
     this.drawGrillFrame();
     this.drawCooler();
     this.buildEmbers();
@@ -220,7 +255,7 @@ export class ShiftScene extends Phaser.Scene {
     g.fillRoundedRect(10, GRID_Y - 6, 340, GRID_H + 12, 10);
     g.fillStyle(0x15100f, 1);
     g.fillRoundedRect(GRID_X - 4, GRID_Y - 2, GRID_W + 8, GRID_H + 4, 6);
-    for (let i = 0; i < SLOT_COUNT; i++) {
+    for (let i = 0; i < this.n; i++) {
       const c = this.cell(i);
       g.lineStyle(1, 0x4a4244, 1);
       g.strokeRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2);
@@ -230,6 +265,14 @@ export class ShiftScene extends Phaser.Scene {
     }
   }
 
+  /** Cell rect for cooler item i of n: <=4 big cards, <=8 two rows, else three rows of icons. */
+  private coolerRect(i: number, n: number) {
+    const x0 = COOLER.x + 12, y0 = COOLER.y + 30;
+    if (n <= 4) return { x: x0 + i * 58, y: y0, w: 52, h: 112, mode: 0 };
+    if (n <= 8) return { x: x0 + (i % 4) * 55, y: y0 + Math.floor(i / 4) * 58, w: 52, h: 54, mode: 1 };
+    return { x: x0 + (i % 6) * 38, y: y0 + Math.floor(i / 6) * 38, w: 36, h: 36, mode: 2 };
+  }
+
   private drawCooler() {
     const g = this.add.graphics();
     g.fillStyle(0x7fa8b8, 1);
@@ -237,28 +280,45 @@ export class ShiftScene extends Phaser.Scene {
     g.fillStyle(0x24343c, 1);
     g.fillRoundedRect(COOLER.x + 5, COOLER.y + 22, COOLER.w - 10, COOLER.h - 27, 6);
     this.add.text(COOLER.x + 10, COOLER.y + 3, 'ตู้แช่', { fontFamily: FONT, fontSize: '14px', color: '#10222a' });
-    const items = ITEMS.filter((i) => i.unlockLevel === 1).slice(0, 4);
-    items.forEach((it, i) => {
-      const x = COOLER.x + 12 + i * 58;
-      const y = COOLER.y + 30;
+    this.coolerCells = [];
+    const ids = this.menu.slice(0, 18);
+    ids.forEach((id, i) => {
+      const it = ITEM_BY_ID[id];
+      const r = this.coolerRect(i, ids.length);
       const b = this.add.graphics();
       b.fillStyle(0x3a4e58, 1);
-      b.fillRoundedRect(x, y, 52, 112, 6);
-      const ic = this.add.graphics({ x: x + 26, y: y + 58 });
-      ic.setScale(0.8);
-      drawBody(ic, it, 0);
-      this.add
-        .text(x + 26, y + 100, it.th, { fontFamily: FONT, fontSize: '10px', color: '#e8f4f8' })
-        .setOrigin(0.5);
+      b.fillRoundedRect(r.x, r.y, r.w, r.h, 6);
+      const ic = this.add.graphics({ x: r.x + r.w / 2, y: r.y + (r.mode === 0 ? 58 : r.mode === 1 ? 22 : 18) });
+      if (r.mode === 0) {
+        ic.setScale(0.8);
+        drawBody(ic, it, 0);
+      } else {
+        ic.setScale(r.mode === 1 ? 0.75 : 0.55);
+        drawIcon(ic, it);
+      }
+      if (r.mode < 2) {
+        this.add.text(r.x + r.w / 2, r.y + r.h - (r.mode === 0 ? 12 : 8), it.th, { fontFamily: FONT, fontSize: r.mode === 0 ? '10px' : '9px', color: '#e8f4f8' }).setOrigin(0.5);
+      }
+      const count = this.add
+        .text(r.x + r.w - 2, r.y + 1, '', { fontFamily: FONT, fontSize: '11px', color: '#fff', backgroundColor: '#c0302a', padding: { x: 3, y: 0 } })
+        .setOrigin(1, 0)
+        .setDepth(2);
+      this.coolerCells.push({ id, x: r.x, y: r.y, w: r.w, h: r.h, icon: ic, count });
     });
+    this.refreshCooler();
+  }
+
+  private refreshCooler() {
+    for (const c of this.coolerCells) {
+      const left = this.stock[c.id] ?? 0;
+      c.count.setText(String(left));
+      c.icon.setAlpha(left > 0 ? 1 : 0.28);
+      c.count.setBackgroundColor(left > 0 ? '#c0302a' : '#4a4a52');
+    }
   }
 
   private coolerItemAt(x: number, y: number): string | undefined {
-    const items = ITEMS.filter((i) => i.unlockLevel === 1).slice(0, 4);
-    for (let i = 0; i < items.length; i++) {
-      if (inRect({ x: COOLER.x + 12 + i * 58, y: COOLER.y + 30, w: 52, h: 112 }, x, y)) return items[i].id;
-    }
-    return undefined;
+    return this.coolerCells.find((c) => inRect(c, x, y))?.id;
   }
 
   private drawBinAndBottle() {
@@ -293,7 +353,7 @@ export class ShiftScene extends Phaser.Scene {
 
   private buildEmbers() {
     this.embers = [];
-    for (let i = 0; i < SLOT_COUNT; i++) {
+    for (let i = 0; i < this.n; i++) {
       const c = this.cell(i);
       const arr = [];
       for (let k = 0; k < 7; k++) {
@@ -326,12 +386,11 @@ export class ShiftScene extends Phaser.Scene {
       this.btns.push({ t, fn });
       return t;
     };
-    btn(356, '↻', () => this.scene.restart());
-    this.ringBtn = btn(326, '◎', () => {
+    this.ringBtn = btn(356, '◎', () => {
       this.ringOn = !this.ringOn;
       this.ringBtn.setAlpha(this.ringOn ? 1 : 0.45);
     });
-    this.muteBtn = btn(296, '♪', () => {
+    this.muteBtn = btn(326, '♪', () => {
       this.sfx.muted = !this.sfx.muted;
       this.muteBtn.setAlpha(this.sfx.muted ? 0.45 : 1);
     });
@@ -585,48 +644,31 @@ export class ShiftScene extends Phaser.Scene {
     this.gestures.clear();
     this.fanning.clear();
     this.setBrush(null);
-    for (let i = 0; i < SLOT_COUNT; i++) this.sfx.setSizzle(i, 0);
+    for (let i = 0; i < this.n; i++) this.sfx.setSizzle(i, 0);
+    // skewers still on the grill when the clock ends are wasted
+    for (const sk of this.grill.slots) if (sk) this.wasted[sk.itemId] = (this.wasted[sk.itemId] ?? 0) + 1;
     const L = this.shift.ledger;
-    const avg = this.shift.avgStars();
-    const rows: [string, string][] = [
-      ['ยอดขาย', `฿${Math.round(L.sales)}`],
-      ['ทิป', `฿${Math.round(L.tips)}`],
-      ['คอมโบ', `฿${Math.round(L.combo)}`],
-      ['รวมเงิน', `฿${Math.round(this.shift.money)}`],
-      ['ลูกค้าที่เสิร์ฟ', `${L.served}`],
-      ['ลูกค้าเดินหนี', `${L.walkouts}`],
-      ['คะแนนเฉลี่ย', avg === null ? '-' : `⭐ ${avg.toFixed(1)}`],
-      ['ไม้สุกพอดี', `${this.stats.perfect}`],
-      ['ไม้พอใช้', `${this.stats.ok}`],
-      ['ไม้ไหม้/เกรียม', `${this.stats.burnt}`],
-    ];
-    const o = this.overlay;
-    const dim = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.7).setOrigin(0).setDepth(300).setInteractive();
-    const g = this.add.graphics().setDepth(301);
-    const px = 30, py = 110, pw = 300, ph = 460;
-    g.fillStyle(0xf4ecd8, 1);
-    g.fillRoundedRect(px, py, pw, ph, 10);
-    o.push(dim, g);
-    const T = (x: number, y: number, s: string, size: number, color: string) => this.add.text(x, y, s, { fontFamily: FONT, fontSize: `${size}px`, color }).setDepth(302);
-    o.push(T(GAME_W / 2, py + 14, 'สรุปยอด', 26, '#3a2a20').setOrigin(0.5, 0));
-    o.push(T(GAME_W / 2, py + 50, '- - - - - - - - - - - - - - -', 14, '#8a7a68').setOrigin(0.5, 0));
-    rows.forEach(([k, v], i) => {
-      const y = py + 80 + i * 30 + (i >= 4 ? 8 : 0) + (i >= 7 ? 8 : 0);
-      const big = i === 3;
-      o.push(T(px + 20, y, k, big ? 20 : 16, '#3a2a20'));
-      o.push(T(px + pw - 20, y, v, big ? 20 : 16, big ? '#b02a1a' : '#3a2a20').setOrigin(1, 0));
-    });
-    const b = this.add
-      .text(GAME_W / 2, py + ph - 56, 'เปิดร้านอีกรอบ', { fontFamily: FONT, fontSize: '20px', color: '#fff', backgroundColor: '#c0302a', padding: { x: 18, y: 10 } })
-      .setOrigin(0.5, 0)
-      .setDepth(302);
-    o.push(b);
-    this.btns.push({ t: b, fn: () => this.scene.restart() });
+    const soldTotal = Object.values(this.sold).reduce((x, y) => x + y, 0);
+    const result: ShiftResult = {
+      sales: L.sales,
+      tips: L.tips,
+      combo: L.combo,
+      served: L.served,
+      walkouts: L.walkouts,
+      avgStars: this.shift.avgStars(),
+      sold: { ...this.sold },
+      wasted: { ...this.wasted },
+      xpEarned: soldTotal * PROGRESSION.xpPerSkewer + this.perfects * PROGRESSION.xpPerPerfect,
+    };
+    session.pendingResult = result;
+    session.ratingBefore = session.s.rating;
+    session.soldYesterday = { ...this.sold };
+    this.time.delayedCall(900, () => this.scene.start('Summary'));
   }
 
   // ---- views ----
   private syncViews() {
-    for (let i = 0; i < SLOT_COUNT; i++) {
+    for (let i = 0; i < this.n; i++) {
       const sk = this.grill.slots[i];
       const v = this.views[i];
       if (v && (!sk || v.sk.id !== sk.id)) {
@@ -685,7 +727,7 @@ export class ShiftScene extends Phaser.Scene {
 
   // ---- input ----
   private skewerAt(x: number, y: number): number {
-    for (let i = 0; i < SLOT_COUNT; i++) {
+    for (let i = 0; i < this.n; i++) {
       if (!this.views[i]) continue;
       const c = this.cell(i);
       if (x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h - this.coalH + 8) return i;
@@ -693,7 +735,7 @@ export class ShiftScene extends Phaser.Scene {
     return -1;
   }
   private cellAt(x: number, y: number): number {
-    for (let i = 0; i < SLOT_COUNT; i++) {
+    for (let i = 0; i < this.n; i++) {
       const c = this.cell(i);
       if (x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h) return i;
     }
@@ -712,6 +754,15 @@ export class ShiftScene extends Phaser.Scene {
       g.mode = 'ui';
       g.ui = btn.fn;
     } else if (p.y < SHOP_H) {
+      if (this.shopView.signAt(p.x, p.y)) {
+        this.paused = true;
+        renameShop(
+          this.game,
+          (name) => this.shopView.setShopName(name),
+          () => (this.paused = false),
+        );
+        return;
+      }
       const id = this.shopView.billAt(p.x, p.y);
       if (id !== null) {
         this.pushEvents(this.shift.collect(id));
@@ -843,6 +894,7 @@ export class ShiftScene extends Phaser.Scene {
       removeSkewer(this.grill, slot);
       this.sfx.bin();
       this.stats.bin++;
+      this.wasted[v.sk.itemId] = (this.wasted[v.sk.itemId] ?? 0) + 1;
       this.destroyView(slot);
       this.refreshHud();
       return;
@@ -866,6 +918,8 @@ export class ShiftScene extends Phaser.Scene {
       this.shift.addSkewer(slotT, { itemId, quality: q });
       this.sfx.place();
       this.stats[this.qualityLabel(q)]++;
+      this.sold[itemId] = (this.sold[itemId] ?? 0) + 1;
+      if (q >= 0.95) this.perfects++;
       this.refreshCards();
       this.refreshHud();
       return;
@@ -880,10 +934,14 @@ export class ShiftScene extends Phaser.Scene {
   }
 
   private placeItem(itemId: string) {
+    if ((this.stock[itemId] ?? 0) <= 0) return this.say('ของหมด!');
     const slot = this.grill.slots.findIndex((s) => s === null);
     if (slot < 0) return this.say('เตาเต็ม!');
-    if (placeSkewer(this.grill, slot, itemId)) this.sfx.place();
-    else this.say('วางไม่ได้');
+    if (placeSkewer(this.grill, slot, itemId)) {
+      this.sfx.place();
+      this.stock[itemId]--;
+      this.refreshCooler();
+    } else this.say('วางไม่ได้');
   }
 
   // ---- flames / fx ----
@@ -936,7 +994,7 @@ export class ShiftScene extends Phaser.Scene {
 
   // ---- loop ----
   update(time: number, deltaMs: number) {
-    const dt = Math.min(deltaMs / 1000, 0.1) * DEV_SPEED;
+    const dt = this.paused ? 0 : Math.min(deltaMs / 1000, 0.1) * DEV_SPEED;
     const fan = this.over ? undefined : [...this.gestures.values()].find((g) => g.mode === 'fan');
     const fanSlot = fan ? fan.slot : null;
     if (!this.over) {
@@ -950,7 +1008,7 @@ export class ShiftScene extends Phaser.Scene {
     this.syncViews();
     for (const e of events) this.handleEvent(e);
     // flames follow state (covers flare without events, e.g. after extinguish)
-    for (let i = 0; i < SLOT_COUNT; i++) {
+    for (let i = 0; i < this.n; i++) {
       const sk = this.grill.slots[i];
       if (sk && sk.flare > 0) this.addFlame(i);
       else if (this.flames[i]) this.removeFlame(i);
@@ -967,7 +1025,7 @@ export class ShiftScene extends Phaser.Scene {
     // coals
     const g = this.coalG;
     g.clear();
-    for (let i = 0; i < SLOT_COUNT; i++) {
+    for (let i = 0; i < this.n; i++) {
       const c = this.cell(i);
       const sk = this.grill.slots[i];
       const heat = this.grill.heat[i];
@@ -988,7 +1046,7 @@ export class ShiftScene extends Phaser.Scene {
     }
 
     // views, smoke, sizzle
-    for (let i = 0; i < SLOT_COUNT; i++) {
+    for (let i = 0; i < this.n; i++) {
       const v = this.views[i];
       const sk = this.grill.slots[i];
       let level = 0;

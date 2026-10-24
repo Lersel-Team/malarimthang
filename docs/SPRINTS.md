@@ -53,13 +53,13 @@ Goal: a 3-minute shift that ends with a money total.
 
 **Done when:** a full shift is playable start to finish with real orders.
 
-## Sprint 3 — Economy loop & saving
+## Sprint 3 — Economy loop & saving ✅ (S3-4 sim↔game drift report deferred to Sprint 4 tuning)
 Goal: day after day, with money that persists.
-- S3-1 `core-dev`: market (packs, daily jitter, stock, spoilage), daily costs, loan safety net.
-- S3-2 `engine-dev`: Market scene, Summary scene (receipt, reviews), day counter.
-- S3-3 `core-dev`: `SaveRepository` + `LocalSave` with schema versioning/migrations.
-- S3-5 `engine-dev`: **renameable shop**: name your stall on first launch (default "หม่าล่าริมทาง"), rename by tapping the sign; shown on the shop sign, receipt and boot screen. Saved with the game.
-- S3-6 `qa`: Playwright smoke (boot → shift → serve → receipt) using `?speed=`; carried over from S2-4.
+- [x] S3-1 `core-dev`: market (packs, daily jitter, stock, spoilage), daily costs, loan safety net.
+- [x] S3-2 `engine-dev`: Market scene, Summary scene (receipt, reviews), day counter.
+- [x] S3-3 `core-dev`: `SaveRepository` + `LocalSave` with schema versioning/migrations.
+- [x] S3-5 `engine-dev`: **renameable shop**: name your stall on first launch (default "หม่าล่าริมทาง"), rename by tapping the sign; shown on the shop sign, receipt and boot screen. Saved with the game.
+- [x] S3-6 `qa`: Playwright smoke (boot → shift → serve → receipt) using `?speed=`; carried over from S2-4.
 - S3-4 `balance`: hook the simulator to the same TS rules (or port them), and report the drift between sim and game.
 
 **Done when:** you can play 5 days in a row, close the tab, and continue.

@@ -14,7 +14,12 @@ export const SHOP_H = 250;
 export interface ShopViewOptions {
   /** Number of seats (tables × chairs) to draw; 2 in Sprint 2. */
   seats: number;
+  /** Text on the neon sign (default 'หม่าล่าริมทาง'). */
+  shopName?: string;
 }
+
+/** Sign board rectangle in shop-strip coords (tap target for renaming). */
+export const SIGN_RECT = { x: 186, y: 48, w: 150, h: 26 };
 
 // ---- layout (local coords, strip is 360×250; feet baseline of each spot) ----
 export const TICKET_SPOTS = [
@@ -81,6 +86,23 @@ export class ShopView {
   private passTimer = 1;
   private motoTimer = 8 + Math.random() * 8;
   private destroyed = false;
+  private signText!: Phaser.GameObjects.Text;
+
+  /** Redraws the sign text, shrinking the font so it fits the board. */
+  setShopName(name: string) {
+    const t = this.signText;
+    if (!t) return;
+    t.setText(name);
+    let fs = 15;
+    t.setFontSize(fs);
+    while (t.width > SIGN_RECT.w - 14 && fs > 7) t.setFontSize(--fs);
+  }
+
+  /** True if (x, y) in scene coords hits the shop sign. */
+  signAt(x: number, y: number): boolean {
+    const r = SIGN_RECT;
+    return x >= this.x + r.x && x <= this.x + r.x + r.w && y >= this.y + r.y && y <= this.y + r.y + r.h;
+  }
 
   constructor(
     readonly scene: Phaser.Scene,
@@ -209,12 +231,13 @@ export class ShopView {
     for (const s of TICKET_SPOTS) g.strokeEllipse(s.x, s.y, 26, 8);
 
     // sign text
-    const sign = this.own(
+    const sign = this.signText = this.own(
       this.scene.add
-        .text(this.x + 261, this.y + 61, 'หม่าล่าริมทาง', { fontFamily: FONT, fontSize: '15px', color: '#ffd9a0', stroke: '#ff5a2a', strokeThickness: 1 })
+        .text(this.x + 261, this.y + 61, this.opts.shopName ?? 'หม่าล่าริมทาง', { fontFamily: FONT, fontSize: '15px', color: '#ffd9a0', stroke: '#ff5a2a', strokeThickness: 1 })
         .setOrigin(0.5)
         .setDepth(-49),
     );
+    this.setShopName(this.opts.shopName ?? 'หม่าล่าริมทาง');
     this.scene.tweens.add({ targets: sign, alpha: 0.82, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
 
     // light

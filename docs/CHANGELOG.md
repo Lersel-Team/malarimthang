@@ -1,5 +1,15 @@
 # Changelog
 
+## Sprint 3: Economy loop & saving (2026-10-24)
+- Day loop: Name (first launch) → Market → Shift → Summary → next day. Autosaves after every step.
+- Economy (`src/core/economy.ts`): seeded daily market (one cheap, one dear item), packs of 10 with caps, "refill like yesterday", rent/charcoal/wages, overnight spoilage (fridge), mum's 200 ฿ loan, rating, XP/levels, login streak. 41 tests.
+- Save: versioned localStorage save with migrations, corrupt-save backup, sanitising. 13 tests.
+- Renameable shop (first launch + tap the sign/header), Thai text via DOM input.
+- Shift reads stock, seats, grill size and upgrade multipliers from the saved state.
+- Playwright smoke test on system Chrome (`npm run e2e`). Favicon.
+- Supabase prepared but NOT wired: SQL migration, `SupabaseSave`, `docs/SUPABASE.md`.
+- Known: "refill like yesterday" forgets after reload (soldYesterday is in memory); items beyond the first four use placeholder art.
+
 ## Sprint 2: Customers & a full shift (2026-10-24)
 - Shift model (`src/core/shift.ts`): arrivals scaled by location/rating, queue + 3 ticket slots, patience bands (tip/stars), orders with spice, combo, eat-in seats, extra orders, table money (tap = full, auto = base only), clock 18:00–24:00, end event.
 - Shop view: night street, stall, counter, queue, plastic stools, passers-by, motorbike, cat; 5 procedural customer types with walk/eat/happy/angry.
