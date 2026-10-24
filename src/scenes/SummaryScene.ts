@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { setupCamera } from '../engine/hidpi';
 import { GAME_H, GAME_W } from '../config';
 import { endDay, xpForLevel, type DaySummary, type GameState, type ShiftResult } from '../core/economy';
 import { session, todayLocal } from '../session';
@@ -15,6 +16,7 @@ export class SummaryScene extends Phaser.Scene {
   }
 
   create() {
+    setupCamera(this);
     const result: ShiftResult | null = session.pendingResult;
     const before = session.state;
     if (!result || !before) {

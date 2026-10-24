@@ -32,6 +32,7 @@ export interface ArchetypeDef {
   tipRate: number;
   prefs: Partial<Record<Category, number>>;
   spice: [number, number];
+  bulkChance: number;
 }
 
 export interface LocationDef {
@@ -44,7 +45,7 @@ export interface LocationDef {
   unlockCost: number;
 }
 
-export const ARCHETYPES = raw.archetypes as Record<ArchetypeId, ArchetypeDef>;
+export const ARCHETYPES = raw.archetypes as unknown as Record<ArchetypeId, ArchetypeDef>;
 export const LOCATIONS: LocationDef[] = raw.locations as LocationDef[];
 export const SERVICE = raw.service;
 export const EAT_IN = raw.eatIn;

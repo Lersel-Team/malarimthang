@@ -4,7 +4,8 @@ import type { ItemDef } from '../../data/balance';
 import { ALMOST_FROM, type Skewer, type Zone } from '../../core/cooking';
 
 export const BODY_H = 92;
-export const FONT = '"Noto Sans Thai", Tahoma, sans-serif';
+export const FONT = '"Kanit", "Noto Sans Thai", Tahoma, sans-serif';
+export const FONT_FUN = '"Mali", "Kanit", sans-serif';
 
 export const ZONE_COLOR: Record<Zone, number> = {
   raw: 0xd0708a,

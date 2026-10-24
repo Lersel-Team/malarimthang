@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { setupCamera } from '../engine/hidpi';
 import { GAME_H, GAME_W } from '../config';
 import { newGame } from '../core/economy';
 import { DEFAULT_SHOP_NAME, session } from '../session';
@@ -11,6 +12,7 @@ export class NameScene extends Phaser.Scene {
     super('Name');
   }
   create() {
+    setupCamera(this);
     this.add.text(GAME_W / 2, GAME_H * 0.3, '🍢', { fontFamily: FONT, fontSize: '64px' }).setOrigin(0.5);
     this.add.text(GAME_W / 2, GAME_H * 0.42, 'ร้านหม่าล่าริมทาง', { fontFamily: FONT, fontSize: '22px', color: '#ffd9a0' }).setOrigin(0.5);
     openNameInput({

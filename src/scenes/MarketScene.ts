@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { pt, setupCamera } from '../engine/hidpi';
 import { COLORS, GAME_H, GAME_W } from '../config';
 import { buyPacks, createMarket, suggestRefill, takeLoan, type GameState, type Market } from '../core/economy';
 import { ITEM_BY_ID } from '../data/balance';
@@ -37,6 +38,7 @@ export class MarketScene extends Phaser.Scene {
   }
 
   create() {
+    setupCamera(this);
     this.bought = {};
     this.scroll = 0;
     this.hits = [];
@@ -242,20 +244,23 @@ export class MarketScene extends Phaser.Scene {
     return y >= LIST_Y && y <= LIST_Y + LIST_H;
   }
   private onDown(p: Phaser.Input.Pointer) {
-    if (this.modal || !this.inList(p.y)) return;
-    this.drag = { y0: p.y, s0: this.scroll, moved: false };
+    const q = pt(p);
+    if (this.modal || !this.inList(q.y)) return;
+    this.drag = { y0: q.y, s0: this.scroll, moved: false };
   }
   private onMove(p: Phaser.Input.Pointer) {
+    const q = pt(p);
     if (!this.drag || !p.isDown) return;
-    if (Math.abs(p.y - this.drag.y0) > DRAG_PX) this.drag.moved = true;
-    if (this.drag.moved) this.setScroll(this.drag.s0 - (p.y - this.drag.y0));
+    if (Math.abs(q.y - this.drag.y0) > DRAG_PX) this.drag.moved = true;
+    if (this.drag.moved) this.setScroll(this.drag.s0 - (q.y - this.drag.y0));
   }
   private onUp(p: Phaser.Input.Pointer) {
+    const q = pt(p);
     const d = this.drag;
     this.drag = null;
-    if (!d || d.moved || this.modal || !this.inList(p.y)) return;
-    const cy = p.y + this.scroll;
-    const h = this.hits.find((h) => p.x >= h.x && p.x <= h.x + h.w && cy >= h.y && cy <= h.y + h.h);
+    if (!d || d.moved || this.modal || !this.inList(q.y)) return;
+    const cy = q.y + this.scroll;
+    const h = this.hits.find((h) => q.x >= h.x && q.x <= h.x + h.w && cy >= h.y && cy <= h.y + h.h);
     h?.fn();
   }
 }

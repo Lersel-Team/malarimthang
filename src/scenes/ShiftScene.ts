@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { settings } from '../settings';
+import { pt, setupCamera } from '../engine/hidpi';
 import { COLORS, GAME_H, GAME_W } from '../config';
 import { COOKING, ITEM_BY_ID, LOCATIONS, PROGRESSION, UPGRADES } from '../data/balance';
 import type { ShiftResult } from '../core/economy';
@@ -160,6 +162,11 @@ export class ShiftScene extends Phaser.Scene {
   }
 
   create() {
+    setupCamera(this);
+    if (settings.fx && this.renderer.type === Phaser.WEBGL) {
+      this.cameras.main.postFX.addVignette(0.5, 0.5, 1.0, 0.2);
+      // Bloom was tried (addBloom(0xffffff,1,1,0.5,0.18)) but washes/dims the whole frame; keep vignette only.
+    }
     const st = session.s;
     this.n = Math.max(1, Math.min(12, Math.round(upgradeValue('grillSize', st.upgrades.grillSize ?? 0))));
     this.setGeometry();
@@ -743,18 +750,19 @@ export class ShiftScene extends Phaser.Scene {
   }
 
   private onDown(p: Phaser.Input.Pointer) {
+    const q = pt(p);
     this.sfx.unlock();
-    this.ptr.x = p.x;
-    this.ptr.y = p.y;
-    const g: Gesture = { mode: 'ui', sx: p.x, sy: p.y, slot: -1, dragging: false };
-    const btn = this.btns.find((b) => b.t.getBounds().contains(p.x, p.y));
+    this.ptr.x = q.x;
+    this.ptr.y = q.y;
+    const g: Gesture = { mode: 'ui', sx: q.x, sy: q.y, slot: -1, dragging: false };
+    const btn = this.btns.find((b) => b.t.getBounds().contains(q.x, q.y));
     if (this.over) {
       if (btn) g.ui = btn.fn;
     } else if (btn) {
       g.mode = 'ui';
       g.ui = btn.fn;
-    } else if (p.y < SHOP_H) {
-      if (this.shopView.signAt(p.x, p.y)) {
+    } else if (q.y < SHOP_H) {
+      if (this.shopView.signAt(q.x, q.y)) {
         this.paused = true;
         renameShop(
           this.game,
@@ -763,30 +771,30 @@ export class ShiftScene extends Phaser.Scene {
         );
         return;
       }
-      const id = this.shopView.billAt(p.x, p.y);
+      const id = this.shopView.billAt(q.x, q.y);
       if (id !== null) {
         this.pushEvents(this.shift.collect(id));
         this.sfx.coin();
       }
-    } else if (this.cardAt(p.x, p.y) >= 0) {
-      const i = this.cardAt(p.x, p.y);
-      const lx = p.x - cardX(i), ly = p.y - CARD_Y;
+    } else if (this.cardAt(q.x, q.y) >= 0) {
+      const i = this.cardAt(q.x, q.y);
+      const lx = q.x - cardX(i), ly = q.y - CARD_Y;
       if (lx >= SHAKER.dx && lx <= SHAKER.dx + SHAKER.w && ly >= SHAKER.dy && ly <= SHAKER.dy + SHAKER.h) g.ui = () => this.shakeSlot(i);
       else g.ui = () => this.serveSlot(i);
-    } else if (inRect(WATER, p.x, p.y)) {
+    } else if (inRect(WATER, q.x, q.y)) {
       g.mode = 'bottle';
-    } else if (inRect(POT, p.x, p.y)) {
+    } else if (inRect(POT, q.x, q.y)) {
       g.mode = 'pot';
-      g.kind = p.x < POT.x + POT.w / 2 ? 'oil' : 'sauce';
-    } else if (this.brushMode && this.skewerAt(p.x, p.y) >= 0) {
+      g.kind = q.x < POT.x + POT.w / 2 ? 'oil' : 'sauce';
+    } else if (this.brushMode && this.skewerAt(q.x, q.y) >= 0) {
       g.mode = 'brush';
       g.done = new Set();
-      const i = this.skewerAt(p.x, p.y);
+      const i = this.skewerAt(q.x, q.y);
       g.done.add(i);
       this.brushSkewer(i);
     } else {
-      const itemId = this.coolerItemAt(p.x, p.y);
-      const sIdx = this.skewerAt(p.x, p.y);
+      const itemId = this.coolerItemAt(q.x, q.y);
+      const sIdx = this.skewerAt(q.x, q.y);
       if (itemId) {
         g.mode = 'cooler';
         g.itemId = itemId;
@@ -794,7 +802,7 @@ export class ShiftScene extends Phaser.Scene {
         g.mode = 'skewer';
         g.slot = sIdx;
       } else {
-        const c = this.cellAt(p.x, p.y);
+        const c = this.cellAt(q.x, q.y);
         if (c >= 0) {
           g.mode = 'fan';
           g.slot = c;
@@ -806,12 +814,13 @@ export class ShiftScene extends Phaser.Scene {
   }
 
   private onMove(p: Phaser.Input.Pointer) {
-    this.ptr.x = p.x;
-    this.ptr.y = p.y;
+    const q = pt(p);
+    this.ptr.x = q.x;
+    this.ptr.y = q.y;
     const g = this.gestures.get(p.id);
     if (!g) return;
     if (g.mode === 'brush' && g.done) {
-      const i = this.skewerAt(p.x, p.y);
+      const i = this.skewerAt(q.x, q.y);
       if (i >= 0 && !g.done.has(i)) {
         g.done.add(i);
         this.brushSkewer(i);
@@ -819,31 +828,32 @@ export class ShiftScene extends Phaser.Scene {
       return;
     }
     if (g.mode === 'fan') {
-      const c = this.cellAt(p.x, p.y);
+      const c = this.cellAt(q.x, q.y);
       if (c >= 0) g.slot = c;
       return;
     }
     if (g.mode !== 'skewer') return;
     const v = this.views[g.slot];
     if (!v) return;
-    if (!g.dragging && Phaser.Math.Distance.Between(p.x, p.y, g.sx, g.sy) > DRAG_PX) {
+    if (!g.dragging && Phaser.Math.Distance.Between(q.x, q.y, g.sx, g.sy) > DRAG_PX) {
       g.dragging = true;
       this.tweens.killTweensOf(v.g);
       v.g.setScale(this.skScale() * 1.1).setAngle(0).setDepth(100);
     }
     if (g.dragging) {
-      v.g.x = p.x;
-      v.g.y = p.y;
+      v.g.x = q.x;
+      v.g.y = q.y;
     }
   }
 
   private onUp(p: Phaser.Input.Pointer) {
+    const q = pt(p);
     const g = this.gestures.get(p.id);
     this.gestures.delete(p.id);
     this.fanning.delete(p.id);
     if (!g) return;
     if (g.mode === 'ui') {
-      const d = Phaser.Math.Distance.Between(p.x, p.y, g.sx, g.sy);
+      const d = Phaser.Math.Distance.Between(q.x, q.y, g.sx, g.sy);
       if (g.ui && d <= DRAG_PX) g.ui();
     } else if (g.mode === 'bottle') {
       this.waterMode = !this.waterMode;
@@ -851,16 +861,16 @@ export class ShiftScene extends Phaser.Scene {
       this.redrawBottle();
       if (this.waterMode) this.say('แตะไม้ที่ไฟลุก');
     } else if (g.mode === 'pot') {
-      if (Phaser.Math.Distance.Between(p.x, p.y, g.sx, g.sy) <= DRAG_PX && g.kind) {
+      if (Phaser.Math.Distance.Between(q.x, q.y, g.sx, g.sy) <= DRAG_PX && g.kind) {
         this.setBrush(this.brushMode === g.kind ? null : g.kind);
         if (this.brushMode) {
-          this.ptr.x = p.x;
-          this.ptr.y = p.y;
+          this.ptr.x = q.x;
+          this.ptr.y = q.y;
           this.say(this.brushMode === 'oil' ? 'แปรงน้ำมัน: แตะหรือปัดผ่านไม้' : 'แปรงซอส: ทาเมื่อสุกทั้งสองด้าน', 1200);
         }
       }
     } else if (g.mode === 'cooler') {
-      if (Phaser.Math.Distance.Between(p.x, p.y, g.sx, g.sy) <= DRAG_PX && g.itemId) this.placeItem(g.itemId);
+      if (Phaser.Math.Distance.Between(q.x, q.y, g.sx, g.sy) <= DRAG_PX && g.itemId) this.placeItem(g.itemId);
     } else if (g.mode === 'skewer') {
       const v = this.views[g.slot];
       if (!v) return;
@@ -880,7 +890,7 @@ export class ShiftScene extends Phaser.Scene {
         }
         return;
       }
-      this.drop(g.slot, v, p.x, p.y);
+      this.drop(g.slot, v, q.x, q.y);
     }
   }
 

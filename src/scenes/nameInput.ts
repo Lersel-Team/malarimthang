@@ -11,7 +11,7 @@ export interface NameInputOpts {
   onDone: (name: string | null) => void;
 }
 
-const FONT = '"Noto Sans Thai", Tahoma, sans-serif';
+const FONT = '"Kanit", "Noto Sans Thai", Tahoma, sans-serif';
 export const NAME_MAX = 24;
 
 /** Opens the overlay; returns a close function. Empty input falls back to the default name. */
