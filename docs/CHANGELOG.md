@@ -36,3 +36,6 @@
 
 ## Sprint 0: Research & design (2026-10-24)
 - Soi Sizzle teardown, GDD, `data/balance.json`, economy simulator, sprint plan.
+
+## Test tools (2026-10-24)
+- DEV panel (`src/devpanel.ts`): orange "DEV" button top-left. Reset everything / reset stats (keep shop name), ±money, level, next day, rating, unlock all items/locations, max upgrades, fill/clear stock, clear loan/streak, view save JSON. Shown in dev builds, and in any build with `?debug=1` (remembered; turn off with `?debug=0`). Edits autosave and restart the current scene.

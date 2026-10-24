@@ -25,4 +25,5 @@ const game = new Phaser.Game({
   input: { activePointers: 2 },
   scene: [BootScene, NameScene, MarketScene, ShiftScene, SummaryScene],
 });
+void import('./devpanel').then((m) => m.mountDevPanel(game));
 if (import.meta.env.DEV) void import('./devhooks').then((m) => m.exposeGame(game));
