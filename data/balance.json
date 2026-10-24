@@ -10,10 +10,10 @@
   },
   "cooking": {
     "doneAt": 1.0,
-    "burnMargin": 0.3,
+    "burnMargin": 0.45,
     "topSideCooling": 0.0,
     "flipCooldownSec": 0.25,
-    "flareChancePerSecFatty": 0.04,
+    "flareChancePerSecFatty": 0.025,
     "flareHeatMult": 2.2,
     "flareDurationSec": 2.0,
     "rawPenaltyQuality": 0.0,
@@ -44,37 +44,37 @@
     "autoCollectSec": 16
   },
   "items": [
-    { "id": "fishball",   "th": "ลูกชิ้นปลา",     "cat": "processed", "cost": 2,  "price": 8,  "sideTime": 3.5, "window": 0.45, "fatty": false, "unlockLevel": 1,  "unlockCost": 0 },
-    { "id": "crabstick",  "th": "ปูอัด",          "cat": "processed", "cost": 2,  "price": 8,  "sideTime": 3.0, "window": 0.35, "fatty": false, "unlockLevel": 1,  "unlockCost": 0 },
-    { "id": "enoki",      "th": "เห็ดเข็มทอง",    "cat": "veg",       "cost": 2,  "price": 10, "sideTime": 3.0, "window": 0.25, "fatty": false, "unlockLevel": 1,  "unlockCost": 0 },
-    { "id": "porkbelly",  "th": "หมูสามชั้น",     "cat": "meat",      "cost": 6,  "price": 15, "sideTime": 5.5, "window": 0.35, "fatty": true,  "unlockLevel": 1,  "unlockCost": 0 },
-    { "id": "sausage",    "th": "ไส้กรอก",        "cat": "processed", "cost": 3,  "price": 10, "sideTime": 4.0, "window": 0.40, "fatty": true,  "unlockLevel": 2,  "unlockCost": 150 },
-    { "id": "tofu",       "th": "เต้าหู้ปลา",      "cat": "processed", "cost": 3,  "price": 10, "sideTime": 4.5, "window": 0.50, "fatty": false, "unlockLevel": 2,  "unlockCost": 150 },
-    { "id": "babycorn",   "th": "ข้าวโพดอ่อน",     "cat": "veg",       "cost": 2,  "price": 8,  "sideTime": 4.5, "window": 0.45, "fatty": false, "unlockLevel": 3,  "unlockCost": 200 },
-    { "id": "chicken",    "th": "ไก่",            "cat": "meat",      "cost": 5,  "price": 12, "sideTime": 6.5, "window": 0.30, "fatty": false, "unlockLevel": 3,  "unlockCost": 250, "rawIsDangerous": true },
-    { "id": "quailegg",   "th": "ไข่นกกระทา",      "cat": "processed", "cost": 3,  "price": 12, "sideTime": 4.0, "window": 0.35, "fatty": false, "unlockLevel": 4,  "unlockCost": 300 },
-    { "id": "cheeseball", "th": "ลูกชิ้นชีส",      "cat": "processed", "cost": 4,  "price": 15, "sideTime": 4.0, "window": 0.20, "fatty": false, "unlockLevel": 5,  "unlockCost": 450, "burstsWhenBurnt": true },
-    { "id": "kingoyster", "th": "เห็ดออรินจิ",     "cat": "veg",       "cost": 3,  "price": 12, "sideTime": 5.0, "window": 0.40, "fatty": false, "unlockLevel": 5,  "unlockCost": 400 },
-    { "id": "squid",      "th": "ปลาหมึก",        "cat": "seafood",   "cost": 9,  "price": 25, "sideTime": 4.0, "window": 0.25, "fatty": false, "unlockLevel": 6,  "unlockCost": 800 },
-    { "id": "beef",       "th": "เนื้อวัว",        "cat": "meat",      "cost": 10, "price": 25, "sideTime": 5.0, "window": 0.22, "fatty": false, "unlockLevel": 7,  "unlockCost": 1000 },
-    { "id": "shrimp",     "th": "กุ้ง",            "cat": "seafood",   "cost": 12, "price": 30, "sideTime": 4.0, "window": 0.22, "fatty": false, "unlockLevel": 8,  "unlockCost": 1400 },
-    { "id": "lamb",       "th": "เนื้อแกะ",        "cat": "meat",      "cost": 14, "price": 35, "sideTime": 5.0, "window": 0.22, "fatty": true,  "unlockLevel": 10, "unlockCost": 2200 },
-    { "id": "scallop",    "th": "หอยเชลล์",        "cat": "seafood",   "cost": 16, "price": 40, "sideTime": 3.5, "window": 0.18, "fatty": false, "unlockLevel": 12, "unlockCost": 3500 },
-    { "id": "wagyu",      "th": "เนื้อวากิว",       "cat": "meat",      "cost": 32, "price": 79, "sideTime": 3.5, "window": 0.15, "fatty": true,  "unlockLevel": 15, "unlockCost": 6000 }
+    { "id": "fishball",   "th": "ลูกชิ้นปลา",     "cat": "processed", "cost": 2,  "price": 12,  "sideTime": 5.5, "window": 0.45, "fatty": false, "unlockLevel": 1,  "unlockCost": 0 },
+    { "id": "crabstick",  "th": "ปูอัด",          "cat": "processed", "cost": 2,  "price": 12,  "sideTime": 5.0, "window": 0.35, "fatty": false, "unlockLevel": 1,  "unlockCost": 0 },
+    { "id": "enoki",      "th": "เห็ดเข็มทอง",    "cat": "veg",       "cost": 2,  "price": 15, "sideTime": 5.0, "window": 0.32, "fatty": false, "unlockLevel": 1,  "unlockCost": 0 },
+    { "id": "porkbelly",  "th": "หมูสามชั้น",     "cat": "meat",      "cost": 6,  "price": 22, "sideTime": 9.0, "window": 0.35, "fatty": true,  "unlockLevel": 1,  "unlockCost": 0 },
+    { "id": "sausage",    "th": "ไส้กรอก",        "cat": "processed", "cost": 3,  "price": 15, "sideTime": 6.5, "window": 0.40, "fatty": true,  "unlockLevel": 2,  "unlockCost": 150 },
+    { "id": "tofu",       "th": "เต้าหู้ปลา",      "cat": "processed", "cost": 3,  "price": 15, "sideTime": 7.0, "window": 0.50, "fatty": false, "unlockLevel": 2,  "unlockCost": 150 },
+    { "id": "babycorn",   "th": "ข้าวโพดอ่อน",     "cat": "veg",       "cost": 2,  "price": 12,  "sideTime": 7.0, "window": 0.45, "fatty": false, "unlockLevel": 3,  "unlockCost": 200 },
+    { "id": "chicken",    "th": "ไก่",            "cat": "meat",      "cost": 5,  "price": 18, "sideTime": 10.5, "window": 0.30, "fatty": false, "unlockLevel": 3,  "unlockCost": 250, "rawIsDangerous": true },
+    { "id": "quailegg",   "th": "ไข่นกกระทา",      "cat": "processed", "cost": 3,  "price": 18, "sideTime": 6.5, "window": 0.35, "fatty": false, "unlockLevel": 4,  "unlockCost": 300 },
+    { "id": "cheeseball", "th": "ลูกชิ้นชีส",      "cat": "processed", "cost": 4,  "price": 22, "sideTime": 6.5, "window": 0.20, "fatty": false, "unlockLevel": 5,  "unlockCost": 450, "burstsWhenBurnt": true },
+    { "id": "kingoyster", "th": "เห็ดออรินจิ",     "cat": "veg",       "cost": 3,  "price": 18, "sideTime": 8.0, "window": 0.40, "fatty": false, "unlockLevel": 5,  "unlockCost": 400 },
+    { "id": "squid",      "th": "ปลาหมึก",        "cat": "seafood",   "cost": 9,  "price": 38, "sideTime": 6.5, "window": 0.25, "fatty": false, "unlockLevel": 6,  "unlockCost": 800 },
+    { "id": "beef",       "th": "เนื้อวัว",        "cat": "meat",      "cost": 10, "price": 38, "sideTime": 8.0, "window": 0.22, "fatty": false, "unlockLevel": 7,  "unlockCost": 1000 },
+    { "id": "shrimp",     "th": "กุ้ง",            "cat": "seafood",   "cost": 12, "price": 45, "sideTime": 6.5, "window": 0.22, "fatty": false, "unlockLevel": 8,  "unlockCost": 1400 },
+    { "id": "lamb",       "th": "เนื้อแกะ",        "cat": "meat",      "cost": 14, "price": 52, "sideTime": 8.0, "window": 0.22, "fatty": true,  "unlockLevel": 10, "unlockCost": 2200 },
+    { "id": "scallop",    "th": "หอยเชลล์",        "cat": "seafood",   "cost": 16, "price": 60, "sideTime": 5.5, "window": 0.18, "fatty": false, "unlockLevel": 12, "unlockCost": 3500 },
+    { "id": "wagyu",      "th": "เนื้อวากิว",       "cat": "meat",      "cost": 32, "price": 118, "sideTime": 5.5, "window": 0.15, "fatty": true,  "unlockLevel": 15, "unlockCost": 6000 }
   ],
   "archetypes": {
-    "student":  { "th": "นักเรียน",     "size": [2, 4], "maxSpend": 50,  "patienceSec": 30, "tipRate": 0.00, "prefs": { "processed": 3, "veg": 1, "meat": 1, "seafood": 0.3 }, "spice": [0, 2] },
-    "office":   { "th": "พนักงานออฟฟิศ", "size": [3, 6], "maxSpend": 150, "patienceSec": 22, "tipRate": 0.05, "prefs": { "processed": 1, "veg": 1, "meat": 2, "seafood": 1 },   "spice": [1, 3] },
-    "family":   { "th": "ครอบครัว",     "size": [5, 9], "maxSpend": 200, "patienceSec": 35, "tipRate": 0.03, "prefs": { "processed": 2, "veg": 2, "meat": 1.5, "seafood": 1 }, "spice": [0, 1] },
-    "tourist":  { "th": "นักท่องเที่ยว",  "size": [3, 6], "maxSpend": 300, "patienceSec": 28, "tipRate": 0.12, "prefs": { "processed": 0.5, "veg": 1, "meat": 2, "seafood": 2.5 }, "spice": [0, 2] },
-    "nightowl": { "th": "สายดริ๊งค์",     "size": [4, 8], "maxSpend": 250, "patienceSec": 18, "tipRate": 0.08, "prefs": { "processed": 1.5, "veg": 0.5, "meat": 3, "seafood": 1 }, "spice": [2, 4] }
+    "student":  { "th": "นักเรียน",     "size": [1, 3], "maxSpend": 50,  "patienceSec": 45, "tipRate": 0.00, "prefs": { "processed": 3, "veg": 1, "meat": 1, "seafood": 0.3 }, "spice": [0, 2] },
+    "office":   { "th": "พนักงานออฟฟิศ", "size": [2, 4], "maxSpend": 150, "patienceSec": 35, "tipRate": 0.05, "prefs": { "processed": 1, "veg": 1, "meat": 2, "seafood": 1 },   "spice": [1, 3] },
+    "family":   { "th": "ครอบครัว",     "size": [3, 6], "maxSpend": 200, "patienceSec": 50, "tipRate": 0.03, "prefs": { "processed": 2, "veg": 2, "meat": 1.5, "seafood": 1 }, "spice": [0, 1] },
+    "tourist":  { "th": "นักท่องเที่ยว",  "size": [2, 5], "maxSpend": 300, "patienceSec": 42, "tipRate": 0.12, "prefs": { "processed": 0.5, "veg": 1, "meat": 2, "seafood": 2.5 }, "spice": [0, 2] },
+    "nightowl": { "th": "สายดริ๊งค์",     "size": [3, 6], "maxSpend": 250, "patienceSec": 28, "tipRate": 0.08, "prefs": { "processed": 1.5, "veg": 0.5, "meat": 3, "seafood": 1 }, "spice": [2, 4] }
   },
   "locations": [
-    { "id": "soi",        "th": "ปากซอยหน้าบ้าน",  "rent": 40,  "customersPerMin": 6,  "mix": { "student": 0.4, "office": 0.4, "family": 0.2 },                                   "unlockLevel": 1,  "unlockCost": 0 },
-    { "id": "school",     "th": "หน้าโรงเรียน",    "rent": 80,  "customersPerMin": 9,  "mix": { "student": 0.75, "family": 0.25 },                                                "unlockLevel": 4,  "unlockCost": 1200 },
-    { "id": "nightmarket","th": "ตลาดนัดกลางคืน",  "rent": 180, "customersPerMin": 10, "mix": { "office": 0.35, "family": 0.3, "nightowl": 0.2, "student": 0.15 },                 "unlockLevel": 7,  "unlockCost": 4000 },
-    { "id": "khaosan",    "th": "ถนนข้าวสาร",     "rent": 400, "customersPerMin": 11, "mix": { "tourist": 0.55, "nightowl": 0.45 },                                              "unlockLevel": 11, "unlockCost": 12000 },
-    { "id": "yaowarat",   "th": "เยาวราช",       "rent": 600, "customersPerMin": 12, "mix": { "tourist": 0.4, "office": 0.2, "family": 0.2, "nightowl": 0.2 },                  "unlockLevel": 14, "unlockCost": 25000 }
+    { "id": "soi",        "th": "ปากซอยหน้าบ้าน",  "rent": 40,  "customersPerMin": 4,  "mix": { "student": 0.4, "office": 0.4, "family": 0.2 },                                   "unlockLevel": 1,  "unlockCost": 0 },
+    { "id": "school",     "th": "หน้าโรงเรียน",    "rent": 80,  "customersPerMin": 7,  "mix": { "student": 0.75, "family": 0.25 },                                                "unlockLevel": 4,  "unlockCost": 1200 },
+    { "id": "nightmarket","th": "ตลาดนัดกลางคืน",  "rent": 180, "customersPerMin": 8, "mix": { "office": 0.35, "family": 0.3, "nightowl": 0.2, "student": 0.15 },                 "unlockLevel": 7,  "unlockCost": 4000 },
+    { "id": "khaosan",    "th": "ถนนข้าวสาร",     "rent": 400, "customersPerMin": 9, "mix": { "tourist": 0.55, "nightowl": 0.45 },                                              "unlockLevel": 11, "unlockCost": 12000 },
+    { "id": "yaowarat",   "th": "เยาวราช",       "rent": 600, "customersPerMin": 10, "mix": { "tourist": 0.4, "office": 0.2, "family": 0.2, "nightowl": 0.2 },                  "unlockLevel": 14, "unlockCost": 25000 }
   ],
   "upgrades": [
     { "id": "grillSize",  "th": "ขยายเตา",          "effect": "grillSlots",      "values": [4, 5, 6, 8, 10, 12],       "costs": [250, 600, 1400, 3200, 7000] },
@@ -105,8 +105,8 @@
     { "id": "menuboard","th": "ป้ายเมนูใหญ่",    "cost": 1200, "stat": "bigOrderChance", "value": 0.30 }
   ],
   "progression": {
-    "xpPerSkewer": 1,
-    "xpPerPerfect": 1,
+    "xpPerSkewer": 2,
+    "xpPerPerfect": 2,
     "levelXp": "round(30 * L^1.6)",
     "maxLevel": 20
   },

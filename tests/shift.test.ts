@@ -3,7 +3,7 @@ import {
   Shift, repMult, patienceBand, rollOrder, MAX_TICKETS, MAX_QUEUE, WALK_IN_SEC, WALK_OUT_SEC,
   WALK_SEAT_SEC, type ShiftOptions, type Customer, type ShiftEvent,
 } from '../src/core/shift';
-import { LOCATIONS, ITEM_BY_ID, SERVICE, EAT_IN, SHIFT } from '../src/data/balance';
+import { ARCHETYPES, LOCATIONS, ITEM_BY_ID, SERVICE, EAT_IN, SHIFT } from '../src/data/balance';
 import type { Rng } from '../src/core/cooking';
 
 function mulberry32(a: number): Rng {
@@ -14,6 +14,8 @@ function mulberry32(a: number): Rng {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+/** Base price of the standard 2x porkbelly test order. */
+const BASE = 2 * ITEM_BY_ID.porkbelly.price;
 const soi = LOCATIONS.find((l) => l.id === 'soi')!;
 const MENU = ['fishball', 'crabstick', 'enoki', 'porkbelly'];
 const mk = (o: Partial<ShiftOptions> = {}, seed = 1) =>
@@ -100,11 +102,12 @@ describe('spawning', () => {
       }
       return n;
     };
+    const expected = soi.customersPerMin * repMult(3);
     const lo = count(1), mid = count(3), hi = count(5);
     expect(lo).toBeLessThan(mid);
     expect(mid).toBeLessThan(hi);
-    expect(mid / 5).toBeGreaterThan(4.5); // ~6/min
-    expect(mid / 5).toBeLessThan(8);
+    expect(mid / 5).toBeGreaterThan(expected * 0.75);
+    expect(mid / 5).toBeLessThan(expected * 1.35);
   });
   it('spawnMult speeds arrivals', () => {
     const count = (spawnMult: number) => {
@@ -118,7 +121,7 @@ describe('spawning', () => {
   it('skips spawns when walkIn+queue is full', () => {
     const s = mk({ rating: 5, patienceMult: 100 });
     // block all ticket slots by never serving: customers pile up
-    for (let t = 0; t < 60; t += 0.25) s.tick(0.25);
+    for (let t = 0; t < 240; t += 0.25) s.tick(0.25);
     const waiting = s.customers.filter((c) => c.phase === 'walkIn' || c.phase === 'queue').length;
     expect(waiting).toBeLessThanOrEqual(MAX_QUEUE);
     expect(waiting).toBe(MAX_QUEUE);
@@ -141,7 +144,7 @@ describe('spawning', () => {
   it('order spice within archetype range and patience uses patienceMult', () => {
     const s = mk({ patienceMult: 1.5 });
     const c = spawnOne(s);
-    expect(c.patienceMax).toBeCloseTo({ student: 30, office: 22, family: 35 }[c.archetype as 'student'] * 1.5);
+    expect(c.patienceMax).toBeCloseTo(ARCHETYPES[c.archetype as 'student'].patienceSec * 1.5);
     expect(c.order.spice).toBeGreaterThanOrEqual(0);
     expect(c.order.spice).toBeLessThanOrEqual(4);
   });
@@ -231,14 +234,14 @@ describe('serve math', () => {
     fill(s, c, 1);
     const ev = s.serve(c.ticketSlot!);
     const e = ev[0] as Extract<ShiftEvent, { type: 'served' }>;
-    expect(e.pay).toBe(30);
-    expect(e.tip).toBe(Math.round(30 * 0.12));
+    expect(e.pay).toBe(BASE);
+    expect(e.tip).toBe(Math.round(BASE * 0.12));
     expect(e.stars).toBe(5);
     expect(e.combo).toBe(0);
-    expect(s.money).toBe(30 + 4);
+    expect(s.money).toBe(BASE + Math.round(BASE * 0.12));
     expect(c.phase).toBe('leaving');
     expect(c.mood).toBe('happy');
-    expect(s.ledger).toMatchObject({ served: 1, sales: 30, tips: 4, combo: 0, stars: [5] });
+    expect(s.ledger).toMatchObject({ served: 1, sales: BASE, tips: Math.round(BASE * 0.12), combo: 0, stars: [5] });
     expect(s.avgStars()).toBe(5);
     expect(s.atTicket(0)).toBeNull();
   });
@@ -251,14 +254,14 @@ describe('serve math', () => {
     })();
     fill(s, c);
     const e = s.serve(c.ticketSlot!)[0] as Extract<ShiftEvent, { type: 'served' }>;
-    expect(e.pay).toBeCloseTo(33);
+    expect(e.pay).toBeCloseTo(BASE * 1.1);
   });
   it('band and quality reduce tip and stars', () => {
     const { s, c } = setup('tourist');
     c.patience = c.patienceMax * 0.5; // band 1
     fill(s, c, 0.5);
     const e = s.serve(c.ticketSlot!)[0] as Extract<ShiftEvent, { type: 'served' }>;
-    expect(e.tip).toBe(Math.round(30 * 0.12 * 0.35 * 0.5));
+    expect(e.tip).toBe(Math.round(BASE * 0.12 * 0.35 * 0.5));
     expect(e.stars).toBe(4 - 1);
     expect(c.mood).toBe('sad');
   });
@@ -276,7 +279,7 @@ describe('serve math', () => {
       c.patience = c.patienceMax;
       fill(s, c, 1, shakes);
       const e = s.serve(c.ticketSlot!)[0] as Extract<ShiftEvent, { type: 'served' }>;
-      expect(e.tip).toBe(Math.round(30 * 0.12 * 0.65));
+      expect(e.tip).toBe(Math.round(BASE * 0.12 * 0.65));
       expect(e.stars).toBe(4);
     }
   });
@@ -321,9 +324,9 @@ describe('eat-in', () => {
     fill(s, c);
     const ev = s.serve(c.ticketSlot!);
     expect(types(ev)).toEqual(['served', 'toSeat']);
-    const tip = Math.round(30 * (0.03 + EAT_IN.tipBonus));
+    const tip = Math.round(BASE * (0.03 + EAT_IN.tipBonus));
     expect(c.seat).toBe(0);
-    expect(c.bill).toBe(30 + tip);
+    expect(c.bill).toBe(BASE + tip);
     expect(s.money).toBe(0);
     expect(c.phase).toBe('toSeat');
     s.tick(WALK_SEAT_SEC + 0.3);
@@ -333,11 +336,11 @@ describe('eat-in', () => {
       c.extraDone = true;
       bill = s.tick(0.25).find((e) => e.type === 'bill') ?? bill;
     }
-    expect(bill).toEqual({ type: 'bill', id: c.id, seat: 0, amount: 30 + tip });
+    expect(bill).toEqual({ type: 'bill', id: c.id, seat: 0, amount: BASE + tip });
     expect(c.phaseT).toBeCloseTo(SERVICE.autoCollectSec, 0);
     const ev2 = s.collect(c.id);
-    expect(ev2).toEqual([{ type: 'collected', id: c.id, amount: 30 + tip, auto: false }]);
-    expect(s.money).toBe(30 + tip);
+    expect(ev2).toEqual([{ type: 'collected', id: c.id, amount: BASE + tip, auto: false }]);
+    expect(s.money).toBe(BASE + tip);
     expect(c.phase).toBe('leaving');
     expect(c.seat).toBeNull();
     expect(s.collect(c.id)).toEqual([]);
@@ -349,11 +352,11 @@ describe('eat-in', () => {
     c.extraDone = true;
     fill(s, c);
     s.serve(c.ticketSlot!);
-    expect(c.bill).toBeGreaterThan(30);
+    expect(c.bill).toBeGreaterThan(BASE);
     let auto: ShiftEvent | undefined;
     for (let t = 0; t < 40 && !auto; t += 0.25) auto = s.tick(0.25).find((e) => e.type === 'collected');
-    expect(auto).toEqual({ type: 'collected', id: c.id, amount: 30, auto: true });
-    expect(s.money).toBe(30);
+    expect(auto).toEqual({ type: 'collected', id: c.id, amount: BASE, auto: true });
+    expect(s.money).toBe(BASE);
   });
   it('seat indices are distinct; no free seat falls back to takeaway with reduced tip', () => {
     const s = mk({ seats: 1, rating: 5, patienceMult: 100, location: LOCATIONS[2] });
@@ -373,7 +376,7 @@ describe('eat-in', () => {
     expect(types(out[1])).toEqual(['noSeat', 'served']);
     const e = out[1][1] as Extract<ShiftEvent, { type: 'served' }>;
     expect(e.eatIn).toBe(false);
-    expect(e.tip).toBe(Math.round(30 * (0.12 + EAT_IN.tipBonus) * EAT_IN.noSeatSatisfactionMult));
+    expect(e.tip).toBe(Math.round(BASE * (0.12 + EAT_IN.tipBonus) * EAT_IN.noSeatSatisfactionMult));
     expect(done[1].phase).toBe('leaving');
     expect(done[1].seat).toBeNull();
   });

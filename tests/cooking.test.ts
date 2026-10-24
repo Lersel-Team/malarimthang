@@ -4,6 +4,7 @@ import {
   zoneQuality, brushOil, brushSauce, effectiveMargin, ALMOST_FROM, COOKING, item, type Grill, type Rng,
 } from '../src/core/cooking';
 import { ITEM_BY_ID } from '../src/data/balance';
+const ST = (id: string) => ITEM_BY_ID[id].sideTime;
 
 function mulberry32(a: number): Rng {
   return () => {
@@ -139,16 +140,16 @@ describe('tick cooking', () => {
   it('only the down side cooks', () => {
     const g = flat(); const s = placeSkewer(g, 0, 'fishball')!;
     tick(g, 1, never);
-    expect(s.sides[0]).toBeCloseTo(1 / 3.5);
+    expect(s.sides[0]).toBeCloseTo(1 / ST('fishball'));
     expect(s.sides[1]).toBe(0);
     flip(s);
     tick(g, 1, never);
-    expect(s.sides[0]).toBeCloseTo(1 / 3.5);
-    expect(s.sides[1]).toBeCloseTo(1 / 3.5);
+    expect(s.sides[0]).toBeCloseTo(1 / ST('fishball'));
+    expect(s.sides[1]).toBeCloseTo(1 / ST('fishball'));
   });
   it('reaches doneAt after sideTime', () => {
     const g = flat(); const s = placeSkewer(g, 0, 'crabstick')!;
-    tick(g, 3, never);
+    tick(g, ST('crabstick'), never);
     expect(s.sides[0]).toBeCloseTo(COOKING.doneAt);
   });
   it('heat multiplier scales cooking', () => {
@@ -156,29 +157,29 @@ describe('tick cooking', () => {
     g.heat[1] = 1.3;
     const a = placeSkewer(g, 0, 'crabstick')!, b = placeSkewer(g, 1, 'crabstick')!;
     tick(g, 1, never);
-    expect(a.sides[0]).toBeCloseTo(0.7 / 3);
-    expect(b.sides[0]).toBeCloseTo(1.3 / 3);
+    expect(a.sides[0]).toBeCloseTo(0.7 / ST('crabstick'));
+    expect(b.sides[0]).toBeCloseTo(1.3 / ST('crabstick'));
   });
   it('fan gives x1.5 to the fanned slot only', () => {
     const g = flat();
     const a = placeSkewer(g, 0, 'crabstick')!, b = placeSkewer(g, 1, 'crabstick')!;
     tick(g, 1, never, { fanSlot: 1 });
-    expect(a.sides[0]).toBeCloseTo(1 / 3);
-    expect(b.sides[0]).toBeCloseTo(1.5 / 3);
+    expect(a.sides[0]).toBeCloseTo(1 / ST('crabstick'));
+    expect(b.sides[0]).toBeCloseTo(1.5 / ST('crabstick'));
     tick(g, 1, never, { fanSlot: null });
-    expect(a.sides[0]).toBeCloseTo(2 / 3);
+    expect(a.sides[0]).toBeCloseTo(2 / ST('crabstick'));
   });
   it('flare multiplies heat', () => {
     const g = flat(); const s = placeSkewer(g, 0, 'crabstick')!;
     s.flare = 5;
     tick(g, 1, never);
-    expect(s.sides[0]).toBeCloseTo(COOKING.flareHeatMult / 3);
+    expect(s.sides[0]).toBeCloseTo(COOKING.flareHeatMult / ST('crabstick'));
   });
   it('heat, fan and flare combine', () => {
     const g = flat(); g.heat[0] = 0.8;
     const s = placeSkewer(g, 0, 'crabstick')!; s.flare = 5;
     tick(g, 0.5, never, { fanSlot: 0 });
-    expect(s.sides[0]).toBeCloseTo((0.8 * 1.5 * COOKING.flareHeatMult * 0.5) / 3);
+    expect(s.sides[0]).toBeCloseTo((0.8 * 1.5 * COOKING.flareHeatMult * 0.5) / ST('crabstick'));
   });
   it('empty slots are ignored', () => {
     expect(tick(flat(), 1, never)).toEqual([]);
@@ -187,7 +188,7 @@ describe('tick cooking', () => {
 
 describe('tick zone events', () => {
   it('emits each zone change once on the down side', () => {
-    const g = flat(); placeSkewer(g, 0, 'crabstick'); // sideTime 3, window .35
+    const g = flat(); placeSkewer(g, 0, 'crabstick'); 
     const zones: string[] = [];
     for (let i = 0; i < 400; i++) {
       for (const e of tick(g, 0.05, never)) if (e.type === 'zone') {
@@ -199,7 +200,7 @@ describe('tick zone events', () => {
   it('reports the flipped side', () => {
     const g = flat(); const s = placeSkewer(g, 0, 'crabstick')!;
     flip(s);
-    const ev = tick(g, 2.6, never);
+    const ev = tick(g, ST('crabstick') * ALMOST_FROM / 1 + 0.05, never); // just past the almost threshold
     expect(ev).toEqual([{ type: 'zone', slot: 0, side: 1, zone: 'almost' }]);
   });
   it('no event when zone is unchanged', () => {
@@ -277,7 +278,7 @@ describe('burst', () => {
   });
   it('burst follows the burnt zone event', () => {
     const g = flat(); const s = placeSkewer(g, 0, 'cheeseball')!;
-    s.sides[0] = 1.2 + 0.3 - 0.01;
+    s.sides[0] = COOKING.doneAt + ITEM_BY_ID.cheeseball.window + COOKING.burnMargin - 0.01;
     const ev = tick(g, 0.1, never);
     expect(ev).toEqual([
       { type: 'zone', slot: 0, side: 0, zone: 'burnt' },

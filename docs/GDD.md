@@ -105,9 +105,9 @@ Defined in `data/balance.json → items`. Summary:
 | Starter (Lv1) | ลูกชิ้นปลา, ปูอัด, เห็ดเข็มทอง, หมูสามชั้น | cheap, forgiving; enoki burns fast; pork flares |
 | Early (Lv2–5) | ไส้กรอก, เต้าหู้ปลา, ข้าวโพดอ่อน, ไก่, ไข่นกกระทา, ลูกชิ้นชีส, เห็ดออรินจิ | ไก่ is slow, ลูกชิ้นชีส *bursts* if burnt |
 | Mid (Lv6–10) | ปลาหมึก, เนื้อวัว, กุ้ง, เนื้อแกะ | high margin, narrow windows |
-| Premium (Lv12–15) | หอยเชลล์, เนื้อวากิว | 40–79 ฿/ไม้, very narrow window, a show-off skill check |
+| Premium (Lv12–15) | หอยเชลล์, เนื้อวากิว | 60–118 ฿/ไม้, very narrow window, a show-off skill check |
 
-Margins grow with tier (fish ball 6 ฿ → wagyu 47 ฿), but so do difficulty and ingredient risk.
+Margins grow with tier (fish ball 10 ฿ → wagyu 86 ฿), but so do difficulty and ingredient risk.
 
 ## 6. Customers
 
@@ -231,17 +231,18 @@ XP = 1 per skewer served + 1 per perfect skewer. Level-up needs `round(30 × L^1
 Levels gate unlocks, money buys them, so both skill and saving matter.
 
 ### 8.3 Balance targets (verified with `tools/balance_sim.py`, 60 days)
+**Retuned 2026-10-24 after owner feedback "too hard / too fast":** cooking 1.6× slower, burn margin 0.3 → 0.45, fewer flare-ups, patience ×1.5, smaller orders, fewer customers per minute (start: 4/min ≈ 13 per shift), prices ×1.5 to keep the economy on track, XP ×2.
+
 | Target | Average player (skill 0.7) | Weak (0.4) | Strong (0.9) |
 |---|---|---|---|
-| First upgrade | day 3 | day ≤5 | day 2 |
-| Second location | day 16 | ~day 25 | ~day 13 |
-| Level by day 30 / 60 | 9 / 14 | 8 / 12 | 10 / 16 |
-| Daily profit day 1 → 60 | 290 → 2,500 ฿ | → 1,300 ฿ | → 5,300 ฿ |
-| Content completion | ~80–90 days | | ~60 days |
+| Day 1 profit | ~290 ฿ | ~260 ฿ | ~290 ฿ (demand-limited) |
+| First upgrade | day 2 | day 3 | day 2 |
+| Second location | ~day 15–20 | ~day 20 | ~day 15 |
+| Level by day 30 / 60 | 10 / 15 | 9 / 13 | 11 / 17 |
+| Daily profit by day 60 | ~3,300 ฿ | ~2,100 ฿ | ~3,100–3,700 ฿ |
 
-The grill stays the main bottleneck (skewers served ≈ capacity), so grill and helper upgrades always feel good.
-Skill roughly doubles income without blocking weaker players.
-**Open tuning item:** Khao San/Yaowarat come too late for average players. Revisit after real playtests.
+The grill is still the main bottleneck for average and weak players. Strong players run out of customers first, which is the signal to move location or buy the neon sign.
+**Open tuning item:** Khao San/Yaowarat still come late. Revisit after real playtests.
 
 ## 9. Screens & UX
 1. **Boot/cover:** title, loading lines ("กำลังก่อถ่าน...", "หั่นหมูสามชั้น..."), *เข้าด้วย Google* / *เล่นแบบ Guest* (Google arrives in Sprint 7).
