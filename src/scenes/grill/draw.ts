@@ -66,43 +66,56 @@ export function drawBody(g: Phaser.GameObjects.Graphics, def: ItemDef, c: number
       g.fillEllipse(0, y, 30, 9);
       continue;
     }
-    switch (def.id) {
-      case 'fishball':
-        g.fillStyle(t(0xcfcac4), 1);
-        g.fillCircle(0, y, 11);
-        g.fillStyle(t(0xe6e2dc), 1);
-        g.fillCircle(-3, y - 3, 4);
-        break;
-      case 'crabstick':
-        // slim stick: orange-red skin over white
-        g.fillStyle(t(0xf2ece4), 1);
-        g.fillRoundedRect(-11, y - 4, 22, 8, 4);
-        g.fillStyle(t(0xf0603a), 1);
-        g.fillRoundedRect(-11, y - 4, 22, 4, { tl: 4, tr: 4, bl: 0, br: 0 });
-        break;
-      case 'enoki':
-        for (let j = -2; j <= 2; j++) {
-          g.fillStyle(t(0xf3e6c0), 1);
-          g.fillRect(j * 3.6 - 1.2, y - 13, 2.4, 26);
-          g.fillStyle(t(0xe8d49a), 1);
-          g.fillCircle(j * 3.6, y - 13, 2.2);
-        }
-        break;
-      case 'porkbelly':
-        // chunky slab: rind, lean, fat, lean, fat (reads differently from the slim crab stick)
-        g.fillStyle(t(0xf6e6e2), 1);
-        g.fillRoundedRect(-15, y - 9, 30, 18, 4);
-        g.fillStyle(t(0xd9707a), 1);
-        g.fillRect(-15, y - 6, 30, 4);
-        g.fillRect(-15, y + 1, 30, 4);
-        g.fillStyle(t(0xb8865a), 1);
-        g.fillRoundedRect(-15, y - 9, 30, 3, { tl: 4, tr: 4, bl: 0, br: 0 });
-        break;
-      default:
-        g.fillStyle(t(0xcc9a6a), 1);
-        g.fillRoundedRect(-12, y - 8, 24, 16, 5);
-    }
+    drawChunk(g, def.id, y, t);
   }
+}
+
+
+/** One chunk of an item (fish ball, pork slab, ...) centred at (0, y); t tints a base colour for doneness. */
+function drawChunk(g: Phaser.GameObjects.Graphics, id: string, y: number, t: (base: number) => number): void {
+  switch (id) {
+    case 'fishball':
+      g.fillStyle(t(0xcfcac4), 1);
+      g.fillCircle(0, y, 11);
+      g.fillStyle(t(0xe6e2dc), 1);
+      g.fillCircle(-3, y - 3, 4);
+      break;
+    case 'crabstick':
+      // slim stick: orange-red skin over white
+      g.fillStyle(t(0xf2ece4), 1);
+      g.fillRoundedRect(-11, y - 4, 22, 8, 4);
+      g.fillStyle(t(0xf0603a), 1);
+      g.fillRoundedRect(-11, y - 4, 22, 4, { tl: 4, tr: 4, bl: 0, br: 0 });
+      break;
+    case 'enoki':
+      for (let j = -2; j <= 2; j++) {
+        g.fillStyle(t(0xf3e6c0), 1);
+        g.fillRect(j * 3.6 - 1.2, y - 13, 2.4, 26);
+        g.fillStyle(t(0xe8d49a), 1);
+        g.fillCircle(j * 3.6, y - 13, 2.2);
+      }
+      break;
+    case 'porkbelly':
+      // chunky slab: rind, lean, fat, lean, fat (reads differently from the slim crab stick)
+      g.fillStyle(t(0xf6e6e2), 1);
+      g.fillRoundedRect(-15, y - 9, 30, 18, 4);
+      g.fillStyle(t(0xd9707a), 1);
+      g.fillRect(-15, y - 6, 30, 4);
+      g.fillRect(-15, y + 1, 30, 4);
+      g.fillStyle(t(0xb8865a), 1);
+      g.fillRoundedRect(-15, y - 9, 30, 3, { tl: 4, tr: 4, bl: 0, br: 0 });
+      break;
+    default:
+      g.fillStyle(t(0xcc9a6a), 1);
+      g.fillRoundedRect(-12, y - 8, 24, 16, 5);
+  }
+}
+
+/** Order-ticket icon: one raw chunk on a stub of stick, centred on (0,0), ~30 px tall at scale 1. */
+export function drawIcon(g: Phaser.GameObjects.Graphics, def: ItemDef): void {
+  g.fillStyle(0xc89a5a, 1);
+  g.fillRect(-1.5, -15, 3, 30);
+  drawChunk(g, def.id, 0, (base) => base);
 }
 
 /** Two-side indicator (down side marked) + optional doneness ring, relative to the body. */

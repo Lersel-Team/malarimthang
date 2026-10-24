@@ -18,7 +18,10 @@ import {
 import { Sfx } from '../audio/sfx';
 import { MAX_TICKETS, Shift, type Customer, type ShiftEvent } from '../core/shift';
 import { SHOP_H, ShopView } from './shop/ShopView';
-import { BODY_H, FONT, drawBody, drawIndicators, makeTextures, mix } from './grill/draw';
+import { BODY_H, FONT, drawBody, drawIcon, drawIndicators, makeTextures, mix } from './grill/draw';
+
+// Dev only: ?speed=0.3 slows the game for QA/playtests, ?speed=3 fast-forwards. Ignored in production builds.
+const DEV_SPEED = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('speed')) || 1 : 1;
 
 /** Number of grill slots. 4 for Sprint 1; 6-12 also lay out (6 per row). */
 export const SLOT_COUNT = 4;
@@ -397,8 +400,8 @@ export class ShiftScene extends Phaser.Scene {
         const col = k % 2, row = Math.floor(k / 2);
         const lx = x + 4 + col * 54, ly = y + 24 + row * 24;
         const def = ITEM_BY_ID[l.itemId];
-        const ic = this.add.graphics({ x: lx + 12, y: ly + 10 }).setDepth(5).setScale(0.2).setAngle(90);
-        drawBody(ic, def, 1);
+        const ic = this.add.graphics({ x: lx + 12, y: ly + 10 }).setDepth(5).setScale(0.75);
+        drawIcon(ic, def);
         card.content.push(ic);
         const full = have >= l.qty;
         card.content.push(this.txt(lx + 26, ly + 2, `${Math.min(have, l.qty)}/${l.qty}`, 13, full ? '#8fe08f' : '#fff'));
@@ -411,10 +414,10 @@ export class ShiftScene extends Phaser.Scene {
       card.content.push(this.txt(x + SHAKER.dx + SHAKER.w / 2, by + SHAKER.h / 2, 'ผง', 13, '#fff').setOrigin(0.5));
       if (sp > 0 || c.ticket.shakes > 0) {
         const okShake = c.ticket.shakes === sp;
-        card.content.push(this.txt(x + 54, by + 5, `${c.ticket.shakes}/${sp}`, 13, okShake ? '#8fe08f' : '#f0c8a0'));
+        card.content.push(this.txt(x + SHAKER.dx + SHAKER.w + 4, by + 5, `${c.ticket.shakes}/${sp}`, 13, okShake ? '#8fe08f' : '#f0c8a0'));
       }
       if (done) {
-        card.content.push(this.txt(x + CARD_W - 6, by + 3, 'ส่ง ▶', 15, '#ffe27a').setOrigin(1, 0));
+        card.content.push(this.txt(x + CARD_W - 6, y + 4, 'ส่ง ▶', 13, '#ffe27a').setOrigin(1, 0));
       }
     }
   }
@@ -801,7 +804,7 @@ export class ShiftScene extends Phaser.Scene {
 
   // ---- loop ----
   update(time: number, deltaMs: number) {
-    const dt = Math.min(deltaMs / 1000, 0.1);
+    const dt = Math.min(deltaMs / 1000, 0.1) * DEV_SPEED;
     const fan = this.over ? undefined : [...this.gestures.values()].find((g) => g.mode === 'fan');
     const fanSlot = fan ? fan.slot : null;
     if (!this.over) {
