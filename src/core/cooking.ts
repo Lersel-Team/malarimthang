@@ -20,6 +20,12 @@ export interface Skewer {
   flare: number;
   /** Cheese ball popped after burning: cannot be served. */
   burst: boolean;
+  /** Brushed with oil (else the skewer is dry: quality x dryMult). */
+  oiled: boolean;
+  /** Mala sauce: 'good' = applied once both sides were cooked, 'early' = applied too soon (burns sooner). */
+  sauce: 'none' | 'good' | 'early';
+  /** Seconds of oil drip left (can cause flare-ups). */
+  oilDrip: number;
 }
 
 export interface Grill {
@@ -65,7 +71,7 @@ export function createGrill(slotCount: number, evenness: number, rng: Rng): Gril
 export function placeSkewer(grill: Grill, slot: number, itemId: string): Skewer | null {
   if (!Number.isInteger(slot) || slot < 0 || slot >= grill.slots.length) return null;
   if (grill.slots[slot] || !ITEM_BY_ID[itemId]) return null;
-  const s: Skewer = { id: nextId++, itemId, sides: [0, 0], down: 0, flipCooldown: 0, flare: 0, burst: false };
+  const s: Skewer = { id: nextId++, itemId, sides: [0, 0], down: 0, flipCooldown: 0, flare: 0, burst: false, oiled: false, sauce: 'none', oilDrip: 0 };
   grill.slots[slot] = s;
   return s;
 }
@@ -76,6 +82,28 @@ export function flip(s: Skewer): boolean {
   s.down = s.down === 0 ? 1 : 0;
   s.flipCooldown = COOKING.flipCooldownSec;
   return true;
+}
+
+/** Brushes oil on. Returns false if already oiled. Starts the drip window. */
+export function brushOil(s: Skewer): boolean {
+  if (s.oiled) return false;
+  s.oiled = true;
+  s.oilDrip = COOKING.brush.oilDripSec;
+  return true;
+}
+
+/** Brushes mala sauce on (once). 'good' if both sides are at least almost-cooked, else 'early'. */
+export function brushSauce(s: Skewer): boolean {
+  if (s.sauce !== 'none') return false;
+  const def = item(s);
+  const raw = sideZone(s.sides[0], def) === 'raw' || sideZone(s.sides[1], def) === 'raw';
+  s.sauce = raw ? 'early' : 'good';
+  return true;
+}
+
+/** Burn margin this skewer actually has (halved by sauce put on too early). */
+export function effectiveMargin(s: Skewer): number {
+  return COOKING.burnMargin * (s.sauce === 'early' ? COOKING.brush.earlySauceBurnMarginMult : 1);
 }
 
 /** Takes the skewer off the grill (to an order tray or the bin). */
@@ -112,11 +140,12 @@ export function tick(grill: Grill, dt: number, rng: Rng, opts?: TickOptions): Gr
     }
     // cook the down side
     const d = s.down;
-    const before = sideZone(s.sides[d], def);
+    const margin = effectiveMargin(s);
+    const before = sideZone(s.sides[d], def, margin);
     const fan = fanSlot === slot ? 1.5 : 1;
     const fl = s.flare > 0 ? COOKING.flareHeatMult : 1;
     s.sides[d] += (grill.heat[slot] * fan * fl * dt) / def.sideTime;
-    const after = sideZone(s.sides[d], def);
+    const after = sideZone(s.sides[d], def, margin);
     if (after !== before) {
       events.push({ type: 'zone', slot, side: d, zone: after });
       if (after === 'burnt' && def.burstsWhenBurnt && !s.burst) {
@@ -124,8 +153,14 @@ export function tick(grill: Grill, dt: number, rng: Rng, opts?: TickOptions): Gr
         events.push({ type: 'burst', slot });
       }
     }
-    // fatty items may flare up
-    if (def.fatty && s.flare <= 0 && s.sides[d] > 0.2 && rng() < 1 - Math.pow(1 - COOKING.flareChancePerSecFatty, dt)) {
+    // flare chance: fatty items once cooking; oil drip raises it (and lets lean items flare)
+    const dripping = s.oilDrip > 0;
+    if (dripping) s.oilDrip = Math.max(0, s.oilDrip - dt);
+    const B = COOKING.brush;
+    const chance = dripping
+      ? def.fatty ? COOKING.flareChancePerSecFatty * B.oilDripFlareMult : B.oilDripBaseChance
+      : def.fatty && s.sides[d] > 0.2 ? COOKING.flareChancePerSecFatty : 0;
+    if (chance > 0 && s.flare <= 0 && rng() < 1 - Math.pow(1 - chance, dt)) {
       s.flare = COOKING.flareDurationSec;
       events.push({ type: 'flareStart', slot });
     }
@@ -134,12 +169,12 @@ export function tick(grill: Grill, dt: number, rng: Rng, opts?: TickOptions): Gr
 }
 
 /** Zone of one side's cook value for this item (see GDD §4.1 table). */
-export function sideZone(c: number, def: ItemDef): Zone {
+export function sideZone(c: number, def: ItemDef, margin: number = COOKING.burnMargin): Zone {
   const done = COOKING.doneAt;
   if (c < ALMOST_FROM * done) return 'raw';
   if (c < done) return 'almost';
   if (c < done + def.window) return 'perfect';
-  if (c < done + def.window + COOKING.burnMargin) return 'charred';
+  if (c < done + def.window + margin) return 'charred';
   return 'burnt';
 }
 
@@ -147,9 +182,11 @@ export function sideZone(c: number, def: ItemDef): Zone {
 export function skewerQuality(s: Skewer): number | null {
   if (s.burst) return null;
   const def = item(s);
-  const zs = [sideZone(s.sides[0], def), sideZone(s.sides[1], def)];
+  const m = effectiveMargin(s);
+  const zs = [sideZone(s.sides[0], def, m), sideZone(s.sides[1], def, m)];
   if (zs.includes('raw')) return null;
-  return (zoneQuality(zs[0]) + zoneQuality(zs[1])) / 2;
+  const B = COOKING.brush;
+  return ((zoneQuality(zs[0]) + zoneQuality(zs[1])) / 2) * (s.oiled ? 1 : B.dryMult) * (s.sauce === 'good' ? 1 : B.unsaucedMult);
 }
 
 export { COOKING };

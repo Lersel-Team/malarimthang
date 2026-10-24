@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   createGrill, placeSkewer, flip, removeSkewer, extinguish, tick, sideZone, skewerQuality,
-  zoneQuality, ALMOST_FROM, COOKING, item, type Grill, type Rng,
+  zoneQuality, brushOil, brushSauce, effectiveMargin, ALMOST_FROM, COOKING, item, type Grill, type Rng,
 } from '../src/core/cooking';
 import { ITEM_BY_ID } from '../src/data/balance';
 
@@ -88,8 +88,8 @@ describe('sideZone boundaries', () => {
 
 describe('quality', () => {
   const mk = (a: number, b: number) => {
-    const g = flat(); const s = placeSkewer(g, 0, 'fishball')!; s.sides = [a, b]; return s;
-  };
+    const g = flat(); const s = placeSkewer(g, 0, 'fishball')!; s.sides = [a, b]; s.oiled = true; s.sauce = 'good'; return s;
+  }; // mk is oiled + well-sauced so the zone-average expectations below are unchanged by the brush multipliers
   it('zoneQuality values', () => {
     expect(zoneQuality('perfect')).toBe(1);
     expect(zoneQuality('almost')).toBe(0.7);
@@ -289,5 +289,93 @@ describe('burst', () => {
     s.sides[0] = 5;
     for (let i = 0; i < 20; i++) tick(g, 0.1, never);
     expect(s.burst).toBe(false);
+  });
+});
+
+describe('brushing', () => {
+  const fresh = (id = 'fishball') => { const g = flat(1); return { g, s: placeSkewer(g, 0, id)! }; };
+  const B = COOKING.brush;
+  it('place initialises brush state', () => {
+    const { s } = fresh();
+    expect([s.oiled, s.sauce, s.oilDrip]).toEqual([false, 'none', 0]);
+  });
+  it('brushOil / brushSauce return false on a second brush', () => {
+    const { s } = fresh();
+    expect(brushOil(s)).toBe(true); expect(brushOil(s)).toBe(false);
+    s.sides = [1.1, 1.1];
+    expect(brushSauce(s)).toBe(true); expect(brushSauce(s)).toBe(false);
+  });
+  it('oil starts the drip timer and it counts down', () => {
+    const { g, s } = fresh();
+    brushOil(s);
+    expect(s.oilDrip).toBe(B.oilDripSec);
+    tick(g, 0.5, never);
+    expect(s.oilDrip).toBeCloseTo(B.oilDripSec - 0.5);
+    tick(g, 5, never);
+    expect(s.oilDrip).toBe(0);
+  });
+  function flareRate(id: string, dripping: boolean): number {
+    const rng = mulberry32(7);
+    const { g, s } = fresh(id);
+    let starts = 0, secs = 0;
+    for (let i = 0; i < 100000; i++) {
+      s.sides[0] = 0.5; s.flare = 0; s.oilDrip = dripping ? 1000 : 0;
+      if (tick(g, 0.1, rng).some((e) => e.type === 'flareStart')) starts++;
+      secs += 0.1;
+    }
+    return starts / secs;
+  }
+  it('fatty flare rate during drip = base x oilDripFlareMult', () => {
+    const r = flareRate('porkbelly', true);
+    const e = (1 - Math.pow(1 - COOKING.flareChancePerSecFatty * B.oilDripFlareMult, 0.1)) / 0.1; // per-tick rate
+    expect(r).toBeGreaterThan(e * 0.92); expect(r).toBeLessThan(e * 1.08);
+  });
+  it('lean item flares at oilDripBaseChance only during drip', () => {
+    const r = flareRate('fishball', true);
+    expect(r).toBeGreaterThan(B.oilDripBaseChance * 0.9); expect(r).toBeLessThan(B.oilDripBaseChance * 1.1);
+    expect(flareRate('fishball', false)).toBe(0);
+  });
+  it('no extra flares once the drip has ended', () => {
+    const { g, s } = fresh('fishball');
+    brushOil(s);
+    tick(g, B.oilDripSec + 0.1, never);
+    let n = 0;
+    for (let i = 0; i < 20000; i++) for (const e of tick(g, 0.1, always)) if (e.type === 'flareStart') n++;
+    expect(n).toBe(0);
+  });
+  it('sauce is good when both sides are at least almost, early otherwise', () => {
+    const a = fresh().s; a.sides = [0.9, 1.1]; brushSauce(a); expect(a.sauce).toBe('good');
+    const b = fresh().s; b.sides = [1.1, 0.2]; brushSauce(b); expect(b.sauce).toBe('early');
+    const c = fresh().s; brushSauce(c); expect(c.sauce).toBe('early');
+  });
+  it('early sauce halves the burn margin, so it burns sooner', () => {
+    const def = ITEM_BY_ID['fishball'];
+    const c = COOKING.doneAt + def.window + COOKING.burnMargin * 0.6; // charred normally, burnt with halved margin
+    const a = fresh().s; const b = fresh().s;
+    brushSauce(b);
+    expect(effectiveMargin(a)).toBe(COOKING.burnMargin);
+    expect(effectiveMargin(b)).toBeCloseTo(COOKING.burnMargin * B.earlySauceBurnMarginMult);
+    a.sides = [1.1, c]; b.sides = [1.1, c]; a.sauce = 'good';
+    expect(skewerQuality(a)).toBeCloseTo(0.7 * B.dryMult); // (1+0.4)/2, dry, good sauce
+    expect(skewerQuality(b)).toBeCloseTo(0.5 * B.dryMult * B.unsaucedMult); // (1+0)/2
+  });
+  it('tick emits burnt zone event sooner with early sauce', () => {
+    const { g, s } = fresh(); brushSauce(s);
+    const def = item(s);
+    s.sides[0] = COOKING.doneAt + def.window + COOKING.burnMargin * B.earlySauceBurnMarginMult - 0.001;
+    expect(tick(g, 0.3, never)).toContainEqual({ type: 'zone', slot: 0, side: 0, zone: 'burnt' });
+  });
+  it('quality multipliers: perfect + oil + good sauce = 1.0, dry and unsauced scale down', () => {
+    const s = fresh().s; s.sides = [1.1, 1.1];
+    expect(skewerQuality(s)).toBeCloseTo(B.dryMult * B.unsaucedMult);
+    brushOil(s); expect(skewerQuality(s)).toBeCloseTo(B.unsaucedMult);
+    brushSauce(s); expect(s.sauce).toBe('good');
+    expect(skewerQuality(s)).toBe(1);
+  });
+  it('sideZone default margin unchanged', () => {
+    const def = ITEM_BY_ID['fishball'];
+    const x = COOKING.doneAt + def.window + 0.2;
+    expect(sideZone(x, def)).toBe('charred');
+    expect(sideZone(x, def, 0.1)).toBe('burnt');
   });
 });

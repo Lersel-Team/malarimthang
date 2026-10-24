@@ -1,9 +1,12 @@
 import Phaser from 'phaser';
 import { COLORS, GAME_H, GAME_W } from '../config';
-import { ITEMS, ITEM_BY_ID, LOCATIONS } from '../data/balance';
+import { COOKING, ITEMS, ITEM_BY_ID, LOCATIONS } from '../data/balance';
 import {
   createGrill,
   extinguish,
+  brushOil,
+  brushSauce,
+  effectiveMargin,
   flip,
   item,
   placeSkewer,
@@ -31,8 +34,11 @@ const DRAG_PX = 10;
 // Layout
 const GRID_X = 16, GRID_W = 328, GRID_Y = 388, GRID_H = 150;
 const COOLER = { x: 8, y: 556, w: 240, h: 150 };
-const BIN = { x: 256, y: 576, w: 54, h: 80 };
-const WATER = { x: 318, y: 576, w: 34, h: 80 };
+const BIN = { x: 256, y: 556, w: 54, h: 70 };
+const POT = { x: 256, y: 666, w: 96, h: 60 }; // brush pot below bin/water; oil brush = left half, sauce = right half
+const BRUSH_COL = { oil: 0xf0c020, sauce: 0x8a3a22 } as const;
+type BrushKind = 'oil' | 'sauce';
+const WATER = { x: 318, y: 556, w: 34, h: 70 };
 const HUD_H = 28;
 const CARD_Y = SHOP_H + 4, CARD_W = 112, CARD_H = 122, CARD_GAP = 4, CARD_X0 = 8;
 const cardX = (i: number) => CARD_X0 + i * (CARD_W + CARD_GAP);
@@ -54,12 +60,14 @@ interface View {
   baseY: number;
 }
 interface Gesture {
-  mode: 'skewer' | 'cooler' | 'fan' | 'bottle' | 'ui';
+  mode: 'skewer' | 'cooler' | 'fan' | 'bottle' | 'ui' | 'pot' | 'brush';
   sx: number;
   sy: number;
   slot: number;
   itemId?: string;
   ui?: () => void;
+  kind?: BrushKind;
+  done?: Set<number>;
   dragging: boolean;
 }
 
@@ -84,6 +92,13 @@ export class ShiftScene extends Phaser.Scene {
   private stats = { perfect: 0, ok: 0, burnt: 0, bin: 0 };
   private ringOn = true;
   private waterMode = false;
+  private brushMode: BrushKind | null = null;
+  private brushIdle = 0;
+  private brushG!: Phaser.GameObjects.Graphics;
+  private potG!: Phaser.GameObjects.Graphics;
+  private drip!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private earlyWarned = false;
+  private ptr = { x: 0, y: 0 };
   private coalG!: Phaser.GameObjects.Graphics;
   private bottleG!: Phaser.GameObjects.Graphics;
   private flames: (Phaser.GameObjects.Image | null)[] = [];
@@ -146,6 +161,9 @@ export class ShiftScene extends Phaser.Scene {
     this.shift = new Shift({ location: LOCATIONS[0], menu: MENU.map((m) => m.id), seats: 2, rating: 3, rng: Math.random });
     this.stats = { perfect: 0, ok: 0, burnt: 0, bin: 0 };
     this.waterMode = false;
+    this.brushMode = null;
+    this.brushIdle = 0;
+    this.earlyWarned = false;
 
     makeTextures(this);
     this.drawLowerBackdrop();
@@ -157,6 +175,11 @@ export class ShiftScene extends Phaser.Scene {
     this.coalG = this.add.graphics().setDepth(1);
     this.bottleG = this.add.graphics();
     this.drawBinAndBottle();
+    this.potG = this.add.graphics();
+    this.brushG = this.add.graphics().setDepth(120);
+    this.add.text(POT.x + 24, POT.y + POT.h - 9, 'น้ำมัน', { fontFamily: FONT, fontSize: '10px', color: '#f0d890' }).setOrigin(0.5);
+    this.add.text(POT.x + 72, POT.y + POT.h - 9, 'ซอส', { fontFamily: FONT, fontSize: '10px', color: '#e0a090' }).setOrigin(0.5);
+    this.redrawPot();
     this.buildHud();
     this.buildParticles();
     this.buildCards();
@@ -181,6 +204,7 @@ export class ShiftScene extends Phaser.Scene {
     });
     this.refreshCards();
     this.refreshHud();
+    this.say('ทาน้ำมัน → พลิก → ทาซอส', 2600);
   }
 
   // ---- static drawing ----
@@ -324,14 +348,83 @@ export class ShiftScene extends Phaser.Scene {
     this.smokeBlack = mk({ lifespan: 1600, speedY: { min: -55, max: -30 }, speedX: { min: -16, max: 16 }, scale: { start: 0.9, end: 2.6 }, alpha: { start: 0.8, end: 0 }, tint: 0x222222 });
     this.sparks = mk({ frame: 'spark', lifespan: 600, speedY: { min: -90, max: -40 }, speedX: { min: -30, max: 30 }, scale: { start: 0.9, end: 0 }, alpha: { start: 1, end: 0 }, tint: 0xffa030 });
     this.powder = mk({ frame: 'spark', lifespan: 500, speed: { min: 30, max: 90 }, gravityY: 200, scale: { start: 1, end: 0.2 }, alpha: { start: 1, end: 0 }, tint: 0xd02a1a });
+    this.drip = mk({ frame: 'spark', lifespan: 450, speedX: { min: -8, max: 8 }, speedY: { min: 10, max: 40 }, gravityY: 300, scale: { start: 0.8, end: 0.3 }, alpha: { start: 1, end: 0 }, tint: 0xf0c020 });
     this.splat = mk({ frame: 'spark', lifespan: 700, speed: { min: 40, max: 130 }, gravityY: 260, scale: { start: 1.4, end: 0.3 }, alpha: { start: 1, end: 0 }, tint: 0xf0c830 });
   }
 
   // ---- helpers ----
-  private say(msg: string) {
+  private say(msg: string, hold = 700) {
     this.toast.setText(msg).setAlpha(1);
     this.tweens.killTweensOf(this.toast);
-    this.tweens.add({ targets: this.toast, alpha: 0, delay: 700, duration: 400 });
+    this.tweens.add({ targets: this.toast, alpha: 0, delay: hold, duration: 400 });
+  }
+
+  // ---- brushes ----
+  private brushRect(k: BrushKind) {
+    return { x: POT.x + (k === 'oil' ? 0 : POT.w / 2), y: POT.y, w: POT.w / 2, h: POT.h };
+  }
+
+  private drawBrush(g: Phaser.GameObjects.Graphics, x: number, y: number, k: BrushKind, tilt: number) {
+    // handle (wood) + bristles in the brush colour; (x,y) = bristle tip
+    g.lineStyle(5, 0xb07a40, 1);
+    g.lineBetween(x + tilt, y - 36, x + tilt * 0.3, y - 10);
+    g.fillStyle(0xc8c8d0, 1);
+    g.fillRect(x - 4 + tilt * 0.3, y - 12, 8, 5);
+    g.fillStyle(BRUSH_COL[k], 1);
+    g.fillRoundedRect(x - 6, y - 8, 12, 12, 3);
+  }
+
+  private redrawPot() {
+    const g = this.potG;
+    g.clear();
+    g.fillStyle(0x6a4a3a, 1);
+    g.fillRoundedRect(POT.x + 4, POT.y + 22, POT.w - 8, POT.h - 22, 6);
+    g.fillStyle(0x8a6a56, 1);
+    g.fillRoundedRect(POT.x, POT.y + 20, POT.w, 7, 3);
+    (['oil', 'sauce'] as BrushKind[]).forEach((k) => {
+      const r = this.brushRect(k);
+      const cx = r.x + r.w / 2;
+      if (this.brushMode === k) {
+        g.lineStyle(3, 0xffffff, 1);
+        g.strokeRoundedRect(r.x + 1, r.y - 1, r.w - 2, r.h + 2, 8);
+        // brush lifted out of the pot
+        g.fillStyle(0x000000, 0.35);
+        g.fillRoundedRect(cx - 6, POT.y + 22, 12, 5, 2);
+      } else {
+        this.drawBrush(g, cx, POT.y + 16, k, k === 'oil' ? -5 : 5);
+      }
+    });
+  }
+
+  private setBrush(k: BrushKind | null) {
+    this.brushMode = k;
+    this.brushIdle = 0;
+    if (k && this.waterMode) {
+      this.waterMode = false;
+      this.redrawBottle();
+    }
+    this.redrawPot();
+    if (!k) this.brushG.clear();
+  }
+
+  private brushSkewer(slot: number) {
+    const v = this.views[slot];
+    const k = this.brushMode;
+    if (!v || !k) return;
+    this.brushIdle = 0;
+    const sk = v.sk;
+    if (k === 'oil') {
+      if (!brushOil(sk)) return;
+      this.drip.emitParticleAt(v.baseX, v.baseY - BODY_H * 0.3, 4);
+    } else {
+      if (!brushSauce(sk)) return;
+      this.powder.emitParticleAt(v.baseX, v.baseY - BODY_H * 0.2, 3);
+      if (sk.sauce === 'early' && !this.earlyWarned) {
+        this.earlyWarned = true;
+        this.say('ยังดิบอยู่ ซอสจะไหม้!', 1500);
+      }
+    }
+    this.sfx.brush();
   }
 
   private qualityLabel(q: number): 'perfect' | 'ok' | 'burnt' {
@@ -491,6 +584,7 @@ export class ShiftScene extends Phaser.Scene {
     this.over = true;
     this.gestures.clear();
     this.fanning.clear();
+    this.setBrush(null);
     for (let i = 0; i < SLOT_COUNT; i++) this.sfx.setSizzle(i, 0);
     const L = this.shift.ledger;
     const avg = this.shift.avgStars();
@@ -554,9 +648,16 @@ export class ShiftScene extends Phaser.Scene {
     const def = item(sk);
     const g = v.g;
     g.clear();
-    drawBody(g, def, sk.sides[v.shownDown], sk.burst);
-    const zones: [ReturnType<typeof sideZone>, ReturnType<typeof sideZone>] = [sideZone(sk.sides[0], def), sideZone(sk.sides[1], def)];
-    drawIndicators(g, def, zones, v.shownDown, sk.sides[v.shownDown], this.ringOn, sk.burst);
+    const m = effectiveMargin(sk);
+    const cs = sk.sides[v.shownDown];
+    let glaze: { col: number; alpha: number } | null = null;
+    if (sk.sauce !== 'none') {
+      const dark = Phaser.Math.Clamp((cs - (COOKING.doneAt + def.window)) / (m + 0.25), 0, 1);
+      glaze = { col: mix(0x9a3a22, 0x0a0606, dark), alpha: 0.5 + 0.35 * dark };
+    }
+    drawBody(g, def, cs, sk.burst, { oiled: sk.oiled, glaze });
+    const zones: [ReturnType<typeof sideZone>, ReturnType<typeof sideZone>] = [sideZone(sk.sides[0], def, m), sideZone(sk.sides[1], def, m)];
+    drawIndicators(g, def, zones, v.shownDown, cs, this.ringOn, sk.burst, { oiled: sk.oiled, sauce: sk.sauce });
   }
 
   private doFlip(slot: number) {
@@ -601,6 +702,8 @@ export class ShiftScene extends Phaser.Scene {
 
   private onDown(p: Phaser.Input.Pointer) {
     this.sfx.unlock();
+    this.ptr.x = p.x;
+    this.ptr.y = p.y;
     const g: Gesture = { mode: 'ui', sx: p.x, sy: p.y, slot: -1, dragging: false };
     const btn = this.btns.find((b) => b.t.getBounds().contains(p.x, p.y));
     if (this.over) {
@@ -621,6 +724,15 @@ export class ShiftScene extends Phaser.Scene {
       else g.ui = () => this.serveSlot(i);
     } else if (inRect(WATER, p.x, p.y)) {
       g.mode = 'bottle';
+    } else if (inRect(POT, p.x, p.y)) {
+      g.mode = 'pot';
+      g.kind = p.x < POT.x + POT.w / 2 ? 'oil' : 'sauce';
+    } else if (this.brushMode && this.skewerAt(p.x, p.y) >= 0) {
+      g.mode = 'brush';
+      g.done = new Set();
+      const i = this.skewerAt(p.x, p.y);
+      g.done.add(i);
+      this.brushSkewer(i);
     } else {
       const itemId = this.coolerItemAt(p.x, p.y);
       const sIdx = this.skewerAt(p.x, p.y);
@@ -643,8 +755,18 @@ export class ShiftScene extends Phaser.Scene {
   }
 
   private onMove(p: Phaser.Input.Pointer) {
+    this.ptr.x = p.x;
+    this.ptr.y = p.y;
     const g = this.gestures.get(p.id);
     if (!g) return;
+    if (g.mode === 'brush' && g.done) {
+      const i = this.skewerAt(p.x, p.y);
+      if (i >= 0 && !g.done.has(i)) {
+        g.done.add(i);
+        this.brushSkewer(i);
+      }
+      return;
+    }
     if (g.mode === 'fan') {
       const c = this.cellAt(p.x, p.y);
       if (c >= 0) g.slot = c;
@@ -674,8 +796,18 @@ export class ShiftScene extends Phaser.Scene {
       if (g.ui && d <= DRAG_PX) g.ui();
     } else if (g.mode === 'bottle') {
       this.waterMode = !this.waterMode;
+      if (this.waterMode) this.setBrush(null);
       this.redrawBottle();
       if (this.waterMode) this.say('แตะไม้ที่ไฟลุก');
+    } else if (g.mode === 'pot') {
+      if (Phaser.Math.Distance.Between(p.x, p.y, g.sx, g.sy) <= DRAG_PX && g.kind) {
+        this.setBrush(this.brushMode === g.kind ? null : g.kind);
+        if (this.brushMode) {
+          this.ptr.x = p.x;
+          this.ptr.y = p.y;
+          this.say(this.brushMode === 'oil' ? 'แปรงน้ำมัน: แตะหรือปัดผ่านไม้' : 'แปรงซอส: ทาเมื่อสุกทั้งสองด้าน', 1200);
+        }
+      }
     } else if (g.mode === 'cooler') {
       if (Phaser.Math.Distance.Between(p.x, p.y, g.sx, g.sy) <= DRAG_PX && g.itemId) this.placeItem(g.itemId);
     } else if (g.mode === 'skewer') {
@@ -824,6 +956,14 @@ export class ShiftScene extends Phaser.Scene {
       else if (this.flames[i]) this.removeFlame(i);
     }
 
+    // held brush follows the pointer; auto-drop when idle
+    this.brushG.clear();
+    if (this.brushMode && !this.over) {
+      this.brushIdle += dt;
+      if (this.brushIdle > COOKING.brush.brushIdleDropSec) this.setBrush(null);
+      else this.drawBrush(this.brushG, this.ptr.x, this.ptr.y - 6, this.brushMode, 6);
+    }
+
     // coals
     const g = this.coalG;
     g.clear();
@@ -857,12 +997,13 @@ export class ShiftScene extends Phaser.Scene {
         const def = item(sk);
         const c = sk.sides[sk.down];
         level = Math.min(1, 0.2 + 0.8 * Math.min(1, c));
-        const z = sideZone(c, def);
+        const z = sideZone(c, def, effectiveMargin(sk));
         this.smokeT[i] -= dt;
         if (this.smokeT[i] <= 0 && (z === 'charred' || z === 'burnt')) {
           this.smokeT[i] = z === 'burnt' ? 0.12 : 0.3;
           (z === 'burnt' ? this.smokeBlack : this.smokeGrey).emitParticleAt(v.baseX, v.baseY - BODY_H * 0.45, 1);
         }
+        if (sk.oilDrip > 0 && Math.random() < dt * 14) this.drip.emitParticleAt(v.baseX + (Math.random() - 0.5) * 24, v.baseY + BODY_H * 0.3, 1);
         if (z === 'perfect' && Math.random() < dt * 3) this.steam.emitParticleAt(v.baseX, v.baseY - BODY_H * 0.4, 1);
       }
       if (Math.abs(level - this.lastSizzle[i]) > 0.02) {

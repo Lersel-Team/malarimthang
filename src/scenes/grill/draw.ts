@@ -50,7 +50,13 @@ function cookTint(c: number, def: ItemDef): { col: number; k: number } {
 }
 
 /** Draws the chunks + stick, centred on (0,0), showing the given cook value. */
-export function drawBody(g: Phaser.GameObjects.Graphics, def: ItemDef, c: number, burst = false): void {
+export interface BodyFx {
+  oiled: boolean;
+  /** Glaze colour + alpha (null = no sauce). */
+  glaze: { col: number; alpha: number } | null;
+}
+
+export function drawBody(g: Phaser.GameObjects.Graphics, def: ItemDef, c: number, burst = false, fx?: BodyFx): void {
   const { col, k } = cookTint(c, def);
   const t = (base: number) => mix(base, col, k);
   // stick
@@ -67,6 +73,16 @@ export function drawBody(g: Phaser.GameObjects.Graphics, def: ItemDef, c: number
       continue;
     }
     drawChunk(g, def.id, y, t);
+    if (fx?.glaze) {
+      g.fillStyle(fx.glaze.col, fx.glaze.alpha);
+      g.fillRoundedRect(-13, y - 8, 26, 16, 6);
+    }
+    if (fx?.oiled) {
+      g.fillStyle(0xffffff, 0.6);
+      g.fillEllipse(-4, y - 4, 10, 4);
+      g.fillStyle(0xffffff, 0.35);
+      g.fillEllipse(5, y + 3, 6, 2.5);
+    }
   }
 }
 
@@ -127,8 +143,20 @@ export function drawIndicators(
   downC: number,
   ring: boolean,
   burst: boolean,
+  status?: { oiled: boolean; sauce: 'none' | 'good' | 'early' },
 ): void {
   const by = BODY_H / 2 + 16;
+  if (status) {
+    // tiny state dots: oil (gold) left, sauce (red) right
+    const dot = (x: number, on: boolean, col: number) => {
+      g.fillStyle(on ? col : 0x000000, on ? 1 : 0.35);
+      g.fillCircle(x, by + 3.5, 3.5);
+      g.lineStyle(1, on ? 0xffffff : 0x8a7a80, on ? 0.8 : 0.6);
+      g.strokeCircle(x, by + 3.5, 3.5);
+    };
+    dot(-26, status.oiled, 0xf0c020);
+    dot(26, status.sauce !== 'none', status.sauce === 'early' ? 0xd04010 : 0xc02020);
+  }
   for (let s = 0; s < 2; s++) {
     const x = s === 0 ? -9 : 9;
     g.fillStyle(burst ? 0x555555 : ZONE_COLOR[zones[s]], 1);

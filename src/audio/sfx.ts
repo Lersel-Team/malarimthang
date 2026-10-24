@@ -119,6 +119,11 @@ export class Sfx {
     }
   }
 
+  brush(): void {
+    // soft wet swish: gentle bandpassed noise sweeping upward, slow attack
+    this.burst({ dur: 0.16, type: 'bandpass', f0: 1200 + Math.random() * 300, f1: 2400, q: 0.9, gain: 0.14, attack: 0.05 });
+  }
+
   // ---- internals ----
 
   private makeNoise(ctx: Ctx): AudioBuffer {
