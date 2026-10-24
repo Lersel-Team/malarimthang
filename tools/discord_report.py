@@ -14,13 +14,16 @@ report.json:
   ],
   "progress": [3, 4],                 # optional: done / total tickets
   "footer": "commit 08f9e28",
-  "links": [{"label": "Repo", "url": "https://github.com/..."}]
+  "links": [{"label": "Repo", "url": "https://github.com/..."}],
+  "images": ["path/to/screenshot.png"]  # optional, up to 10, shown in a gallery
 }
 
 Reads DISCORD_WEBHOOK_URL from the environment or .env.local.
 """
 import json
+import mimetypes
 import os
+import uuid
 import sys
 import urllib.request
 from pathlib import Path
@@ -59,6 +62,11 @@ def build(report):
         inner.append(separator())
         body = "\n".join(f"- {l}" for l in sec.get("lines", []))
         inner.append(text(f"### {sec['heading']}\n{body}"))
+    if report.get("images"):
+        inner.append(separator())
+        inner.append({"type": 12, "items": [
+            {"media": {"url": f"attachment://{Path(p).name}"}} for p in report["images"][:10]
+        ]})
     if report.get("footer"):
         inner.append(separator(big=True))
         inner.append(text(f"-# {report['footer']}"))
@@ -70,12 +78,35 @@ def build(report):
     return {"flags": IS_COMPONENTS_V2, "components": [{"type": 17, "accent_color": color, "components": inner}]}
 
 
+def multipart(payload, images):
+    """payload_json + files[n] body for messages with attachments."""
+    boundary = uuid.uuid4().hex
+    parts = []
+    payload = dict(payload, attachments=[{"id": i, "filename": Path(p).name} for i, p in enumerate(images)])
+    parts.append((f'Content-Disposition: form-data; name="payload_json"\r\n'
+                  f"Content-Type: application/json\r\n\r\n").encode() + json.dumps(payload).encode())
+    for i, p in enumerate(images):
+        ctype = mimetypes.guess_type(p)[0] or "application/octet-stream"
+        parts.append((f'Content-Disposition: form-data; name="files[{i}]"; filename="{Path(p).name}"\r\n'
+                      f"Content-Type: {ctype}\r\n\r\n").encode() + Path(p).read_bytes())
+    body = b"".join(f"--{boundary}\r\n".encode() + part + b"\r\n" for part in parts) + f"--{boundary}--\r\n".encode()
+    return body, f"multipart/form-data; boundary={boundary}"
+
+
 def main():
-    report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    report_path = Path(sys.argv[1])
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    # image paths are relative to the report file
+    report["images"] = [str((report_path.parent / p).resolve()) for p in report.get("images", [])][:10]
+    payload = build(report)
+    if report["images"]:
+        data, ctype = multipart(payload, report["images"])
+    else:
+        data, ctype = json.dumps(payload).encode(), "application/json"
     req = urllib.request.Request(
         webhook_url() + "?with_components=true&wait=true",
-        data=json.dumps(build(report)).encode(),
-        headers={"Content-Type": "application/json", "User-Agent": "MalaRimThang-report/1.0"},
+        data=data,
+        headers={"Content-Type": ctype, "User-Agent": "MalaRimThang-report/1.0"},
     )
     try:
         with urllib.request.urlopen(req) as r:
