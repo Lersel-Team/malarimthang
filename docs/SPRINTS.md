@@ -75,8 +75,10 @@ Goal: the game looks like a finished cozy night-street game on a phone. Art is a
 ## Sprint 5 — Self-service & fryer (owner request 2026-10-24)
 Goal: customers pick skewers from your display box into a numbered glass; you cook for them on the grill and the fryer. Design: GDD §4.6, §6.3.
 - S5-1 `core-dev`: Shift model v2 (box state, pick phase, queue numbers, cup/ticket with raw skewers and methods, skip/in-order rules, refill) + tests; extend economy `GameState` with box layout; update balance sim.
+- S5-1b `core-dev`: **bulk orders** (10–20 skewers, budget ×2.5, level 3+) and the **ซื้อ 10 แถม 1** promo (cheapest free, bulk chance ×2, spawn ×1.1) in Shift v2 + tests; grill lanes up to 24 in the model.
 - S5-2 `core-dev`: fry rules in `src/core/frying.ts` (batter, oil temperature, doneness, burnt, quality) + tests.
 - S5-3 `engine-dev`: "จัดตู้" pre-shift scene and the in-shift display box with live counts and refill taps; picking animation into the glass; queue numbers on cups/customers.
+- S5-3b `engine-dev`: **grill bar** for up to 24 lanes in 2 rows with compact skewers, and bulk controls: load whole glass, swipe flip, flip-ready per row, sweep up, brush row (GDD §4.7); bucket cups for 10+ orders.
 - S5-4 `engine-dev`: kitchen rail (cups with queue numbers), load-to-grill/fryer, return-to-cup, "เรียกคิว" call-out; fryer station UI (batter bowl, pans, thermometer, bubbles); SFX (oil sizzle, batter, call-out chime).
 - S5-5 `qa`: Playwright flow: stock box → customer picks → cook → call number; PM playtest and balance retune.
 

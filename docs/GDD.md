@@ -102,6 +102,18 @@ Frying flow, one skewer: **หยิบ → ชุบแป้ง → ลงก�
 **Upgrades:** pan slots (2 → 6), **สูตรแป้งทอด** batter (price ×1.1 / ×1.2 / ×1.3 for fried items, 3 levels).
 Later stations (steamer pot, drinks) reuse the same pattern: a station with slots, a preparation step, a cook step and a "done" cue.
 
+### 4.7 The grill bar: built for 10–20 skewer orders
+Owner request 2026-10-24: real customers often buy 10–20 skewers at once ("ซื้อ 10 แถม 1"), so the grill is a **bar of lanes**, not four big slots, and every common action has a bulk version.
+**Layout:** `grillSize` upgrades go 4 → 6 → 8 → 10 → 12 → 16 → 20 → 24 lanes (`grillBar.maxLanes`). Up to 12 lanes sit in one row; beyond that the bar becomes **2 rows** in the same screen height, so 24 lanes fit in the space the 4 big slots use today. From 13 lanes the skewers draw in **compact mode**: lane ~27 px wide, 3 chunks, the doneness ring replaced by a thin zone-coloured bar above each lane (tiny is fine: lanes are tall, and bulk actions use swipes rather than precise taps). Heat still varies by lane (hot lane glow), so lane choice matters.
+**Bulk controls (each one tap or one swipe):**
+- **ใส่ทั้งแก้ว (load whole glass):** one tap on a cup places all its skewers on free lanes (slow items to the hottest lanes, fried items to the fryer). Skewers loaded together start in sync, so the player works in waves.
+- **Swipe to flip:** drag a finger across lanes to flip every skewer touched (same gesture as the brush swipe). With a brush held, the swipe brushes instead.
+- **พลิกที่สุก (flip ready):** a button per row flips only skewers whose down side is at least "almost" (`flipReadyOnly`), so it can never ruin a half-cooked skewer.
+- **Sweep up:** drag up across lanes to pull skewers to the glass; only `sweepTakesZones` (almost, perfect) move, raw ones stay, burnt ones are not picked (swipe down across them to bin).
+- **ทาทั้งแถว (brush row):** tap the oil/sauce brush icon on a row header to brush the whole row (sauce still obeys the "both sides cooked" rule: uncooked skewers get skipped with a warning).
+- Staff (§8.4) cook the lanes assigned to them with the same bulk logic.
+**Glass → bucket:** orders of 10+ skewers use a bigger cup (ถัง/ถุง) sprite; the ticket shows condensed counts ("ลูกชิ้น ×6, หมู ×4, ปู ×5").
+
 ### 4.4 Feedback (juice)
 Sizzle loudness and pitch follow the down side's `c`. A "ready to flip" ding plays at perfect (can be turned off in settings).
 Steam particles when perfect, smoke when charred, flame sprite on flare. Burnt skewer: small sad "ฟู่" sound.
@@ -189,6 +201,7 @@ This replaces the "customer reads out an order" idea with how real mala stalls w
 2. They walk to the counter. The glass gets a **queue number** (คิวที่ 12, writing on the cup, shown above their head and on the ticket) and goes onto the **kitchen rail** (up to `queue.maxCups` = 4 cups visible, more wait behind).
 3. The player **cooks** what is in the glass: tap a cup to load its skewers onto the grill or fryer (one tap per skewer, or "ใส่ทั้งแก้ว" if there is room), brush, flip, lift, then drop cooked skewers back into the glass. Items marked ทอด go to the fryer.
 4. Finished glass: season with mala powder to the spice level, tap **"เรียกคิว"**: the number is called out loud ("คิวที่ 12 ค่ะ!"), the customer walks over, pays, and goes to eat in or takes away.
+**Bulk buyers and the "ซื้อ 10 แถม 1" promo:** from shop level 3 some customers buy **10–20 skewers** (`bulk.size`; chance per archetype in `balance.json → archetypes.*.bulkChance`: office 10%, family 15%, night-owl 12%, tourist 5%, students never). A bulk order ignores the normal `maxSpend` (budget ×2.5) and uses a bucket. The **โปรโมชั่น ซื้อ 10 แถม 1** (level 3, 300 ฿, toggled on the จัดตู้ screen) gives the cheapest skewer of any 10+ order free, in exchange for **double bulk chance** and **+10% walk-ins**. It is a real trade: less margin per big order, more big orders. Big orders also stress patience (they take long to cook), which is what staff, a bigger grill and the bulk controls answer.
 **Queue fairness:** serving a number while a lower number is still waiting makes the skipped customers' patience drain ×`queue.skipPatienceDrainMult` (1.3); serving in order gives a small tip bonus (`inOrderTipBonus`). So there is a real choice between speed and fairness.
 **Refill:** when a tray runs low, tap it to refill from storage (`refillSec` 1.5 s, you can't cook while refilling that one tap): a small, constant job that makes box size and tray size meaningful upgrades.
 Archetypes still decide who picks what (students: cheap processed; night-owls: meat and fried), now from what is actually in the box.
