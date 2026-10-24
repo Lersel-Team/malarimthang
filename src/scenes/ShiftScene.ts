@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { settings } from '../settings';
-import { pt, setupCamera } from '../engine/hidpi';
-import { COLORS, GAME_H, GAME_W } from '../config';
+import { RES, pt, setupCamera } from '../engine/hidpi';
+import { GAME_H, GAME_W } from '../config';
 import { COOKING, ITEM_BY_ID, LOCATIONS, PROGRESSION, UPGRADES } from '../data/balance';
 import type { ShiftResult } from '../core/economy';
 import { session } from '../session';
@@ -26,7 +26,9 @@ import {
 import { Sfx } from '../audio/sfx';
 import { MAX_TICKETS, Shift, type Customer, type ShiftEvent } from '../core/shift';
 import { SHOP_H, ShopView } from './shop/ShopView';
-import { BODY_H, FONT, drawBody, drawIcon, drawIndicators, makeTextures, mix } from './grill/draw';
+import { BODY_H, FONT, cookStages, drawIndicators, mix } from './grill/draw';
+import { SkewerSprite, drawSkewerSprite, itemIcon } from '../art/items';
+import { uiBanner, uiBar, uiButton, uiMoney, uiPanel, uiPill, uiToast, type UiBar, type UiButton, type UiMoney, type UiPill } from '../art/ui';
 
 // Dev only: ?speed=0.3 slows the game for QA/playtests, ?speed=3 fast-forwards. Ignored in production builds.
 const DEV_SPEED = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('speed')) || 1 : 1;
@@ -39,7 +41,6 @@ const GRID_X = 16, GRID_W = 328, GRID_Y = 388, GRID_H = 150;
 const COOLER = { x: 8, y: 556, w: 240, h: 150 };
 const BIN = { x: 256, y: 556, w: 54, h: 70 };
 const POT = { x: 256, y: 666, w: 96, h: 60 }; // brush pot below bin/water; oil brush = left half, sauce = right half
-const BRUSH_COL = { oil: 0xf0c020, sauce: 0x8a3a22 } as const;
 type BrushKind = 'oil' | 'sauce';
 const WATER = { x: 318, y: 556, w: 34, h: 70 };
 const HUD_H = 28;
@@ -56,14 +57,16 @@ function upgradeValue(id: string, level: number): number {
 
 interface Card {
   bg: Phaser.GameObjects.Graphics;
-  bar: Phaser.GameObjects.Graphics;
+  bars: UiBar[];
   content: Phaser.GameObjects.GameObject[];
   sig: string;
 }
 
 interface View {
   sk: Skewer;
-  g: Phaser.GameObjects.Graphics;
+  /** Container: skewer sprite + indicator graphics (tweened/dragged as one). */
+  g: SkewerSprite;
+  ind: Phaser.GameObjects.Graphics;
   shownDown: 0 | 1;
   baseX: number;
   baseY: number;
@@ -92,35 +95,37 @@ export class ShiftScene extends Phaser.Scene {
   private shopView!: ShopView;
   private cards: Card[] = [];
   private over = false;
-  private hudClock!: Phaser.GameObjects.Text;
-  private hudMoney!: Phaser.GameObjects.Text;
-  private hudStar!: Phaser.GameObjects.Text;
-  private hudCombo!: Phaser.GameObjects.Text;
+  private hudClock!: UiPill;
+  private hudMoney!: UiMoney;
+  private hudStar!: UiPill;
+  private hudCombo!: UiPill;
+  private hudSig = '';
+  private lastToast: Phaser.GameObjects.Container | null = null;
   private powder!: Phaser.GameObjects.Particles.ParticleEmitter;
   private stats = { perfect: 0, ok: 0, burnt: 0, bin: 0 };
   private ringOn = true;
   private waterMode = false;
   private brushMode: BrushKind | null = null;
   private brushIdle = 0;
-  private brushG!: Phaser.GameObjects.Graphics;
+  private heldBrush!: Phaser.GameObjects.Image;
   private potG!: Phaser.GameObjects.Graphics;
+  private potBrush: Record<BrushKind, Phaser.GameObjects.Image> = {} as Record<BrushKind, Phaser.GameObjects.Image>;
+  private fanImg!: Phaser.GameObjects.Image;
   private drip!: Phaser.GameObjects.Particles.ParticleEmitter;
   private earlyWarned = false;
   private ptr = { x: 0, y: 0 };
-  private coalG!: Phaser.GameObjects.Graphics;
-  private bottleG!: Phaser.GameObjects.Graphics;
+  private coals: { hot: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image }[] = [];
+  private bottleImg!: Phaser.GameObjects.Image;
   private flames: (Phaser.GameObjects.Image | null)[] = [];
   private smokeT: number[] = [];
   private lastSizzle: number[] = [];
-  private ringBtn!: Phaser.GameObjects.Text;
-  private muteBtn!: Phaser.GameObjects.Text;
-  private toast!: Phaser.GameObjects.Text;
+  private ringBtn!: UiButton;
+  private muteBtn!: UiButton;
   private steam!: Phaser.GameObjects.Particles.ParticleEmitter;
   private smokeGrey!: Phaser.GameObjects.Particles.ParticleEmitter;
   private smokeBlack!: Phaser.GameObjects.Particles.ParticleEmitter;
   private sparks!: Phaser.GameObjects.Particles.ParticleEmitter;
   private splat!: Phaser.GameObjects.Particles.ParticleEmitter;
-  private embers: { x: number; y: number; r: number; ph: number }[][] = [];
   private fanning = new Set<number>();
   private n = 4; // grill slots
   private menu: string[] = [];
@@ -129,7 +134,7 @@ export class ShiftScene extends Phaser.Scene {
   private wasted: Record<string, number> = {};
   private perfects = 0;
   private paused = false;
-  private coolerCells: { id: string; x: number; y: number; w: number; h: number; icon: Phaser.GameObjects.Graphics; count: Phaser.GameObjects.Text }[] = [];
+  private coolerCells: { id: string; x: number; y: number; w: number; h: number; icon: Phaser.GameObjects.Container | Phaser.GameObjects.Image; count: Phaser.GameObjects.Text }[] = [];
 
   constructor() {
     super('Shift');
@@ -207,30 +212,21 @@ export class ShiftScene extends Phaser.Scene {
     this.brushIdle = 0;
     this.earlyWarned = false;
 
-    makeTextures(this);
     this.drawLowerBackdrop();
     this.shopView = new ShopView(this, 0, 0, GAME_W, SHOP_H, { seats, shopName: st.shopName });
     this.drawGrillFrame();
     this.drawCooler();
-    this.buildEmbers();
-
-    this.coalG = this.add.graphics().setDepth(1);
-    this.bottleG = this.add.graphics();
+    this.buildCoals();
     this.drawBinAndBottle();
-    this.potG = this.add.graphics();
-    this.brushG = this.add.graphics().setDepth(120);
+    this.buildPot();
+    this.heldBrush = this.add.image(0, 0, 'tool-brush-oil').setOrigin(0.5, 0.96).setDisplaySize(16, 46).setDepth(120).setVisible(false);
+    this.fanImg = this.add.image(0, 0, 'tool-fan').setOrigin(0.5, 0.9).setDisplaySize(36, 44).setDepth(110).setVisible(false);
     this.add.text(POT.x + 24, POT.y + POT.h - 9, 'น้ำมัน', { fontFamily: FONT, fontSize: '10px', color: '#f0d890' }).setOrigin(0.5);
     this.add.text(POT.x + 72, POT.y + POT.h - 9, 'ซอส', { fontFamily: FONT, fontSize: '10px', color: '#e0a090' }).setOrigin(0.5);
     this.redrawPot();
     this.buildHud();
     this.buildParticles();
     this.buildCards();
-
-    this.toast = this.add
-      .text(GAME_W / 2, 380, '', { fontFamily: FONT, fontSize: '20px', color: '#fff', stroke: '#000', strokeThickness: 4 })
-      .setOrigin(0.5)
-      .setDepth(200)
-      .setAlpha(0);
 
     this.input.on('pointerdown', this.onDown, this);
     this.input.on('pointermove', this.onMove, this);
@@ -251,17 +247,12 @@ export class ShiftScene extends Phaser.Scene {
 
   // ---- static drawing ----
   private drawLowerBackdrop() {
-    const g = this.add.graphics().setDepth(-2);
-    g.fillStyle(0x140d1c, 1);
-    g.fillRect(0, SHOP_H, GAME_W, GAME_H - SHOP_H);
+    this.add.image(0, SHOP_H, 'station-counter').setOrigin(0, 0).setDisplaySize(GAME_W, GAME_H - SHOP_H).setDepth(-2);
   }
 
   private drawGrillFrame() {
-    const g = this.add.graphics();
-    g.fillStyle(0x3a3436, 1);
-    g.fillRoundedRect(10, GRID_Y - 6, 340, GRID_H + 12, 10);
-    g.fillStyle(0x15100f, 1);
-    g.fillRoundedRect(GRID_X - 4, GRID_Y - 2, GRID_W + 8, GRID_H + 4, 6);
+    const g = this.add.graphics().setDepth(0.5);
+    this.add.image(10, GRID_Y - 6, 'grill-body').setOrigin(0, 0).setDisplaySize(340, GRID_H + 12);
     for (let i = 0; i < this.n; i++) {
       const c = this.cell(i);
       g.lineStyle(1, 0x4a4244, 1);
@@ -281,27 +272,21 @@ export class ShiftScene extends Phaser.Scene {
   }
 
   private drawCooler() {
-    const g = this.add.graphics();
-    g.fillStyle(0x7fa8b8, 1);
-    g.fillRoundedRect(COOLER.x, COOLER.y, COOLER.w, COOLER.h, 10);
-    g.fillStyle(0x24343c, 1);
-    g.fillRoundedRect(COOLER.x + 5, COOLER.y + 22, COOLER.w - 10, COOLER.h - 27, 6);
+    this.add.image(COOLER.x, COOLER.y, 'cooler-body').setOrigin(0, 0).setDisplaySize(COOLER.w, COOLER.h);
+    this.add.image(COOLER.x + 5, COOLER.y + 22, 'cooler-glass').setOrigin(0, 0).setDisplaySize(COOLER.w - 10, COOLER.h - 27).setDepth(1);
     this.add.text(COOLER.x + 10, COOLER.y + 3, 'ตู้แช่', { fontFamily: FONT, fontSize: '14px', color: '#10222a' });
     this.coolerCells = [];
     const ids = this.menu.slice(0, 18);
     ids.forEach((id, i) => {
       const it = ITEM_BY_ID[id];
       const r = this.coolerRect(i, ids.length);
-      const b = this.add.graphics();
-      b.fillStyle(0x3a4e58, 1);
-      b.fillRoundedRect(r.x, r.y, r.w, r.h, 6);
-      const ic = this.add.graphics({ x: r.x + r.w / 2, y: r.y + (r.mode === 0 ? 58 : r.mode === 1 ? 22 : 18) });
+      this.add.image(r.x, r.y, r.mode === 0 ? 'cooler-tray-l' : r.mode === 1 ? 'cooler-tray-m' : 'cooler-tray-s').setOrigin(0, 0).setDisplaySize(r.w, r.h);
+      const cx = r.x + r.w / 2, cy = r.y + (r.mode === 0 ? 58 : r.mode === 1 ? 22 : 18);
+      let ic: Phaser.GameObjects.Container | Phaser.GameObjects.Image;
       if (r.mode === 0) {
-        ic.setScale(0.8);
-        drawBody(ic, it, 0);
+        ic = drawSkewerSprite(this, it.id).setPosition(cx, cy).setScale(0.8);
       } else {
-        ic.setScale(r.mode === 1 ? 0.75 : 0.55);
-        drawIcon(ic, it);
+        ic = itemIcon(this, it.id, r.mode === 1 ? 40 : 32, 'raw').setPosition(cx, cy);
       }
       if (r.mode < 2) {
         this.add.text(r.x + r.w / 2, r.y + r.h - (r.mode === 0 ? 12 : 8), it.th, { fontFamily: FONT, fontSize: r.mode === 0 ? '10px' : '9px', color: '#e8f4f8' }).setOrigin(0.5);
@@ -329,86 +314,74 @@ export class ShiftScene extends Phaser.Scene {
   }
 
   private drawBinAndBottle() {
-    const g = this.add.graphics();
-    g.fillStyle(0x5a5a62, 1);
-    g.fillRoundedRect(BIN.x, BIN.y + 8, BIN.w, BIN.h - 8, 6);
-    g.fillStyle(0x7a7a84, 1);
-    g.fillRoundedRect(BIN.x - 3, BIN.y, BIN.w + 6, 10, 3);
-    g.lineStyle(2, 0x3a3a42, 1);
-    for (let i = 1; i < 4; i++) g.lineBetween(BIN.x + i * 11, BIN.y + 18, BIN.x + i * 11, BIN.y + BIN.h - 8);
+    this.add.image(BIN.x - 3, BIN.y - 4, 'tool-bin').setOrigin(0, 0).setDisplaySize(60, 78);
+    this.bottleImg = this.add.image(WATER.x + WATER.w / 2, WATER.y + WATER.h / 2 + 1, 'tool-bottle').setDisplaySize(40, 76);
     this.add.text(BIN.x + BIN.w / 2, BIN.y + BIN.h + 10, 'ถังขยะ', { fontFamily: FONT, fontSize: '11px', color: '#b0a8b8' }).setOrigin(0.5);
     this.add.text(WATER.x + WATER.w / 2, WATER.y + WATER.h + 10, 'น้ำ', { fontFamily: FONT, fontSize: '11px', color: '#b0a8b8' }).setOrigin(0.5);
     this.redrawBottle();
   }
 
   private redrawBottle() {
-    const g = this.bottleG;
-    g.clear();
-    const { x, y, w, h } = WATER;
-    g.fillStyle(this.waterMode ? 0x5ac8ff : 0x3a86b8, 1);
-    g.fillRoundedRect(x + 3, y + 22, w - 6, h - 22, 8);
-    g.fillStyle(0xdddddd, 1);
-    g.fillRect(x + w / 2 - 5, y + 10, 10, 14);
-    g.fillStyle(0xcc3030, 1);
-    g.fillRect(x + w / 2 - 9, y + 4, 18, 8);
-    g.fillRect(x + w / 2 + 6, y + 6, 8, 3);
-    if (this.waterMode) {
-      g.lineStyle(3, 0xffffff, 1);
-      g.strokeRoundedRect(x - 2, y - 2, w + 4, h + 4, 8);
-    }
+    this.bottleImg.setTexture(this.waterMode ? 'tool-bottle-on' : 'tool-bottle');
   }
 
-  private buildEmbers() {
-    this.embers = [];
+  private buildCoals() {
+    this.coals = [];
     for (let i = 0; i < this.n; i++) {
       const c = this.cell(i);
-      const arr = [];
-      for (let k = 0; k < 7; k++) {
-        arr.push({
-          x: c.x + 8 + Math.random() * (c.w - 16),
-          y: c.y + c.h - this.coalH + 6 + Math.random() * (this.coalH - 12),
-          r: 3 + Math.random() * 4,
-          ph: Math.random() * 6.28,
-        });
-      }
-      this.embers.push(arr);
+      const y0 = c.y + c.h - this.coalH;
+      const w = c.w - 4, h = this.coalH - 2;
+      this.add.image(c.x + 2, y0, 'coal-cold').setOrigin(0, 0).setDisplaySize(w, h).setDepth(1);
+      const hot = this.add.image(c.x + 2, y0, 'coal-hot').setOrigin(0, 0).setDisplaySize(w, h).setDepth(1.1).setAlpha(0);
+      this.add.image(c.x + 2, y0, 'grill-grate').setOrigin(0, 0).setDisplaySize(w, h).setDepth(1.2);
+      const glow = this.add
+        .image(c.x + c.w / 2, y0 - 2, 'fx-glow')
+        .setDisplaySize(c.w, 34)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(1.3)
+        .setAlpha(0);
+      this.coals.push({ hot, glow });
     }
   }
 
   private buildHud() {
     this.btns = [];
     const bar = this.add.graphics().setDepth(90);
-    bar.fillStyle(0x000000, 0.55);
+    bar.fillStyle(0x10091c, 0.7);
     bar.fillRect(0, 0, GAME_W, HUD_H);
-    const st = { fontFamily: FONT, fontSize: '13px', color: COLORS.text };
-    this.hudClock = this.add.text(8, 6, '', st).setDepth(91);
-    this.hudMoney = this.add.text(62, 6, '', { ...st, color: '#ffe27a' }).setDepth(91);
-    this.hudStar = this.add.text(140, 6, '', st).setDepth(91);
-    this.hudCombo = this.add.text(190, 6, '', { ...st, color: '#ff9a6a' }).setDepth(91);
-    const btn = (x: number, label: string, fn: () => void) => {
-      const t = this.add
-        .text(x, 3, label, { fontFamily: FONT, fontSize: '13px', color: '#fff', backgroundColor: '#5a3a6a', padding: { x: 6, y: 3 } })
-        .setOrigin(1, 0)
-        .setDepth(92);
+    bar.fillStyle(0xffb24a, 0.25);
+    bar.fillRect(0, HUD_H - 1, GAME_W, 1);
+    this.hudClock = uiPill(this, 8, 14, '', { kind: 'dark', icon: 'clock', h: 22, anchor: 'left', minW: 60 }).setDepth(91);
+    this.hudMoney = uiMoney(this, 76, 14, { h: 22, anchor: 'left' }).setDepth(91);
+    this.hudStar = uiPill(this, 156, 14, '-', { kind: 'dark', icon: 'star', h: 22, anchor: 'left', minW: 46 }).setDepth(91);
+    this.hudCombo = uiPill(this, 212, 14, '', { kind: 'red', icon: 'fire', h: 22, anchor: 'left' }).setDepth(91);
+    const btn = (x: number, icon: 'sound' | 'gear', fn: () => void) => {
+      const t = uiButton(this, x, 14, 30, 24, '', { variant: 'icon', icon, interactive: false }).setDepth(92);
       this.btns.push({ t, fn });
       return t;
     };
-    this.ringBtn = btn(356, '◎', () => {
+    this.ringBtn = btn(344, 'gear', () => {
       this.ringOn = !this.ringOn;
       this.ringBtn.setAlpha(this.ringOn ? 1 : 0.45);
     });
-    this.muteBtn = btn(326, '♪', () => {
+    this.muteBtn = btn(310, 'sound', () => {
       this.sfx.muted = !this.sfx.muted;
       this.muteBtn.setAlpha(this.sfx.muted ? 0.45 : 1);
     });
     this.muteBtn.setAlpha(this.sfx.muted ? 0.45 : 1);
     this.ringBtn.setAlpha(this.ringOn ? 1 : 0.45);
   }
-  private btns: { t: Phaser.GameObjects.Text; fn: () => void }[] = [];
+  private btns: { t: Phaser.GameObjects.Container; fn: () => void }[] = [];
 
   private buildParticles() {
-    const mk = (cfg: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig) =>
-      this.add.particles(0, 0, cfg.frame === 'spark' ? 'spark' : 'puff', { ...cfg, frame: undefined, emitting: false }).setDepth(60);
+    const mk = (cfg: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig) => {
+      const spark = cfg.frame === 'spark';
+      const k = (spark ? 6 / 8 : 16 / 24) / RES; // art textures are RESx; keep the old on-screen size
+      const sc = cfg.scale as { start: number; end: number };
+      return this.add
+        .particles(0, 0, spark ? 'fx-spark' : 'fx-puff', { ...cfg, scale: { start: sc.start * k, end: sc.end * k }, frame: undefined, emitting: false })
+        .setDepth(60);
+    };
     this.steam = mk({ lifespan: 900, speedY: { min: -50, max: -28 }, speedX: { min: -12, max: 12 }, scale: { start: 0.5, end: 1.5 }, alpha: { start: 0.7, end: 0 }, tint: 0xffffff });
     this.smokeGrey = mk({ lifespan: 1200, speedY: { min: -45, max: -25 }, speedX: { min: -10, max: 10 }, scale: { start: 0.6, end: 1.8 }, alpha: { start: 0.55, end: 0 }, tint: 0x9a9a9a });
     this.smokeBlack = mk({ lifespan: 1600, speedY: { min: -55, max: -30 }, speedX: { min: -16, max: 16 }, scale: { start: 0.9, end: 2.6 }, alpha: { start: 0.8, end: 0 }, tint: 0x222222 });
@@ -420,9 +393,8 @@ export class ShiftScene extends Phaser.Scene {
 
   // ---- helpers ----
   private say(msg: string, hold = 700) {
-    this.toast.setText(msg).setAlpha(1);
-    this.tweens.killTweensOf(this.toast);
-    this.tweens.add({ targets: this.toast, alpha: 0, delay: hold, duration: 400 });
+    this.lastToast?.destroy();
+    this.lastToast = uiToast(this, msg, { y: 372, hold });
   }
 
   // ---- brushes ----
@@ -430,34 +402,30 @@ export class ShiftScene extends Phaser.Scene {
     return { x: POT.x + (k === 'oil' ? 0 : POT.w / 2), y: POT.y, w: POT.w / 2, h: POT.h };
   }
 
-  private drawBrush(g: Phaser.GameObjects.Graphics, x: number, y: number, k: BrushKind, tilt: number) {
-    // handle (wood) + bristles in the brush colour; (x,y) = bristle tip
-    g.lineStyle(5, 0xb07a40, 1);
-    g.lineBetween(x + tilt, y - 36, x + tilt * 0.3, y - 10);
-    g.fillStyle(0xc8c8d0, 1);
-    g.fillRect(x - 4 + tilt * 0.3, y - 12, 8, 5);
-    g.fillStyle(BRUSH_COL[k], 1);
-    g.fillRoundedRect(x - 6, y - 8, 12, 12, 3);
+  private buildPot() {
+    this.add.image(POT.x, POT.y, 'tool-pot').setOrigin(0, 0).setDisplaySize(POT.w, POT.h).setDepth(0.1);
+    (['oil', 'sauce'] as BrushKind[]).forEach((k) => {
+      const r = this.brushRect(k);
+      this.potBrush[k] = this.add
+        .image(r.x + r.w / 2, POT.y + 30, `tool-brush-${k}`)
+        .setOrigin(0.5, 0.96)
+        .setDisplaySize(16, 46)
+        .setAngle(k === 'oil' ? -8 : 8)
+        .setDepth(0.2);
+    });
+    this.add.image(POT.x, POT.y, 'tool-pot-front').setOrigin(0, 0).setDisplaySize(POT.w, POT.h).setDepth(0.3);
+    this.potG = this.add.graphics().setDepth(0.4);
   }
 
   private redrawPot() {
     const g = this.potG;
     g.clear();
-    g.fillStyle(0x6a4a3a, 1);
-    g.fillRoundedRect(POT.x + 4, POT.y + 22, POT.w - 8, POT.h - 22, 6);
-    g.fillStyle(0x8a6a56, 1);
-    g.fillRoundedRect(POT.x, POT.y + 20, POT.w, 7, 3);
     (['oil', 'sauce'] as BrushKind[]).forEach((k) => {
       const r = this.brushRect(k);
-      const cx = r.x + r.w / 2;
+      this.potBrush[k].setVisible(this.brushMode !== k);
       if (this.brushMode === k) {
         g.lineStyle(3, 0xffffff, 1);
         g.strokeRoundedRect(r.x + 1, r.y - 1, r.w - 2, r.h + 2, 8);
-        // brush lifted out of the pot
-        g.fillStyle(0x000000, 0.35);
-        g.fillRoundedRect(cx - 6, POT.y + 22, 12, 5, 2);
-      } else {
-        this.drawBrush(g, cx, POT.y + 16, k, k === 'oil' ? -5 : 5);
       }
     });
   }
@@ -470,7 +438,8 @@ export class ShiftScene extends Phaser.Scene {
       this.redrawBottle();
     }
     this.redrawPot();
-    if (!k) this.brushG.clear();
+    this.heldBrush.setVisible(!!k);
+    if (k) this.heldBrush.setTexture(`tool-brush-${k}`);
   }
 
   private brushSkewer(slot: number) {
@@ -500,18 +469,24 @@ export class ShiftScene extends Phaser.Scene {
   private refreshHud() {
     const sh = this.shift;
     const avg = sh.avgStars();
-    this.hudClock.setText(sh.clock());
-    this.hudMoney.setText(`฿${Math.round(sh.money)}`);
-    this.hudStar.setText(`⭐${avg === null ? '-' : avg.toFixed(1)}`);
-    this.hudCombo.setText(sh.comboSteps > 0 ? `คอมโบ x${sh.comboSteps}` : '');
+    const sig = `${sh.clock()}|${avg === null ? '-' : avg.toFixed(1)}|${sh.comboSteps}`;
+    if (sig !== this.hudSig) {
+      this.hudSig = sig;
+      this.hudClock.setText(sh.clock());
+      this.hudStar.setText(avg === null ? '-' : avg.toFixed(1));
+      this.hudCombo.setText(`x${sh.comboSteps}`).setVisible(sh.comboSteps > 0);
+    }
+    this.hudMoney.setValue(Math.round(sh.money));
   }
 
   // ---- ticket rail ----
   private buildCards() {
     for (let i = 0; i < MAX_TICKETS; i++) {
       const bg = this.add.graphics().setDepth(3);
-      const bar = this.add.graphics().setDepth(4);
-      this.cards.push({ bg, bar, content: [], sig: '' });
+      const bars = (['green', 'xp', 'red'] as const).map((kind) =>
+        uiBar(this, cardX(i) + CARD_W / 2, CARD_Y + CARD_H - 13, CARD_W - 26, { h: 10, kind, shine: false }).setDepth(4).setVisible(false),
+      );
+      this.cards.push({ bg, bars, content: [], sig: '' });
     }
   }
 
@@ -547,52 +522,48 @@ export class ShiftScene extends Phaser.Scene {
         continue;
       }
       const done = this.shift.isComplete(i);
-      bg.fillStyle(done ? 0x3a3a22 : 0x2f2240, 1);
-      bg.fillRoundedRect(x, y, CARD_W, CARD_H, 8);
-      bg.lineStyle(done ? 3 : 2, done ? 0xffd23a : 0x6a4a7a, 1);
-      bg.strokeRoundedRect(x, y, CARD_W, CARD_H, 8);
-      card.content.push(this.txt(x + 6, y + 4, c.name, 13, '#f6d8a0'));
-      const tag = this.txt(x + CARD_W - 5, y + 60, c.order.eatIn ? 'นั่งกิน' : 'กลับบ้าน', 10, c.order.eatIn ? '#8fd8a0' : '#9ab8f0').setOrigin(1, 0);
+      const panel = uiPanel(this, x, y, CARD_W, CARD_H, 'ticket', { origin: 'topLeft', tape: false, notch: 0.15, accent: done ? 0x3f9a62 : 0xd6342b, seed: c.id }).setDepth(3);
+      card.content.push(panel);
+      card.content.push(this.txt(x + 10, y + 9, c.name, 13, '#3a2a20'));
+      const tag = this.txt(x + CARD_W - 9, y + 63, c.order.eatIn ? 'นั่งกิน' : 'กลับบ้าน', 10, c.order.eatIn ? '#2f7a48' : '#2a5aa8').setOrigin(1, 0);
       card.content.push(tag);
       c.order.lines.forEach((l, k) => {
         const have = c.ticket!.skewers.filter((s) => s.itemId === l.itemId).length;
         const col = k % 2, row = Math.floor(k / 2);
-        const lx = x + 4 + col * 54, ly = y + 24 + row * 24;
+        const lx = x + 8 + col * 50, ly = y + 22 + row * 20;
         const def = ITEM_BY_ID[l.itemId];
-        const ic = this.add.graphics({ x: lx + 12, y: ly + 10 }).setDepth(5).setScale(0.75);
-        drawIcon(ic, def);
+        const ic = itemIcon(this, def.id, 26).setPosition(lx + 13, ly + 10).setDepth(5);
         card.content.push(ic);
         const full = have >= l.qty;
-        card.content.push(this.txt(lx + 26, ly + 2, `${Math.min(have, l.qty)}/${l.qty}`, 13, full ? '#8fe08f' : '#fff'));
+        card.content.push(this.txt(lx + 26, ly + 2, `${Math.min(have, l.qty)}/${l.qty}`, 13, full ? '#2f7a48' : '#3a2a20'));
       });
       const sp = c.order.spice;
-      card.content.push(this.txt(x + 6, y + 58, sp === 0 ? 'ไม่เผ็ด' : '🌶'.repeat(sp), 12, '#ff9a8a'));
+      card.content.push(this.txt(x + 10, y + 62, sp === 0 ? 'ไม่เผ็ด' : '🌶'.repeat(sp), 12, '#b02a1a'));
       const by = y + SHAKER.dy;
-      bg.fillStyle(0xa02820, 1);
-      bg.fillRoundedRect(x + SHAKER.dx, by, SHAKER.w, SHAKER.h, 6);
+      card.content.push(this.add.image(x + SHAKER.dx, by, 'tool-shaker').setOrigin(0, 0).setDisplaySize(SHAKER.w, SHAKER.h).setDepth(4));
       card.content.push(this.txt(x + SHAKER.dx + SHAKER.w / 2, by + SHAKER.h / 2, 'ผง', 13, '#fff').setOrigin(0.5));
       if (sp > 0 || c.ticket.shakes > 0) {
         const okShake = c.ticket.shakes === sp;
-        card.content.push(this.txt(x + SHAKER.dx + SHAKER.w + 4, by + 5, `${c.ticket.shakes}/${sp}`, 13, okShake ? '#8fe08f' : '#f0c8a0'));
+        card.content.push(this.txt(x + SHAKER.dx + SHAKER.w + 4, by + 5, `${c.ticket.shakes}/${sp}`, 13, okShake ? '#2f7a48' : '#8a5a30'));
       }
       if (done) {
-        card.content.push(this.txt(x + CARD_W - 6, y + 4, 'ส่ง ▶', 13, '#ffe27a').setOrigin(1, 0));
+        card.content.push(this.txt(x + CARD_W - 10, y + 9, 'ส่ง ▶', 13, '#b0580a').setOrigin(1, 0));
       }
     }
   }
 
   private drawBars() {
     for (let i = 0; i < MAX_TICKETS; i++) {
-      const g = this.cards[i].bar;
-      g.clear();
+      const bars = this.cards[i].bars;
       const c = this.shift.atTicket(i);
-      if (!c || !c.ticket) continue;
+      if (!c || !c.ticket) {
+        bars.forEach((b) => b.setVisible(false));
+        continue;
+      }
       const f = Phaser.Math.Clamp(c.patience / c.patienceMax, 0, 1);
-      const x = cardX(i) + 6, y = CARD_Y + CARD_H - 11, w = CARD_W - 12;
-      g.fillStyle(0x000000, 0.5);
-      g.fillRoundedRect(x, y, w, 6, 3);
-      g.fillStyle(f > 0.6 ? 0x5ac86a : f > 0.3 ? 0xe8c040 : 0xe05040, 1);
-      g.fillRoundedRect(x, y, Math.max(2, w * f), 6, 3);
+      const k = f > 0.6 ? 0 : f > 0.3 ? 1 : 2;
+      bars.forEach((b, j) => b.setVisible(j === k));
+      if (Math.abs(bars[k].value - f) > 0.004) bars[k].setValue(f, false);
     }
   }
 
@@ -651,6 +622,8 @@ export class ShiftScene extends Phaser.Scene {
     this.gestures.clear();
     this.fanning.clear();
     this.setBrush(null);
+    this.lastToast?.destroy();
+    uiBanner(this, GAME_W / 2, 372, 'หมดเวลาแล้ว!').setDepth(400);
     for (let i = 0; i < this.n; i++) this.sfx.setSizzle(i, 0);
     // skewers still on the grill when the clock ends are wasted
     for (const sk of this.grill.slots) if (sk) this.wasted[sk.itemId] = (this.wasted[sk.itemId] ?? 0) + 1;
@@ -684,10 +657,12 @@ export class ShiftScene extends Phaser.Scene {
       }
       if (sk && !this.views[i]) {
         const p = this.skPos(i);
-        const g = this.add.graphics({ x: p.x, y: p.y }).setScale(this.skScale()).setDepth(5);
+        const g = drawSkewerSprite(this, sk.itemId, { compact: this.n >= 13 }).setPosition(p.x, p.y).setScale(this.skScale()).setDepth(5);
+        const ind = this.add.graphics();
+        g.add(ind);
         g.y = p.y - 30;
         this.tweens.add({ targets: g, y: p.y, duration: 140, ease: 'Back.Out' });
-        this.views[i] = { sk, g, shownDown: sk.down, baseX: p.x, baseY: p.y };
+        this.views[i] = { sk, g, ind, shownDown: sk.down, baseX: p.x, baseY: p.y };
       }
     }
   }
@@ -696,17 +671,17 @@ export class ShiftScene extends Phaser.Scene {
     const sk = v.sk;
     const def = item(sk);
     const g = v.g;
-    g.clear();
     const m = effectiveMargin(sk);
     const cs = sk.sides[v.shownDown];
-    let glaze: { col: number; alpha: number } | null = null;
+    const { a, b, t } = cookStages(cs, def, m);
+    g.setStage(a, b, t).setOiled(sk.oiled).setBurst(sk.burst);
     if (sk.sauce !== 'none') {
       const dark = Phaser.Math.Clamp((cs - (COOKING.doneAt + def.window)) / (m + 0.25), 0, 1);
-      glaze = { col: mix(0x9a3a22, 0x0a0606, dark), alpha: 0.5 + 0.35 * dark };
-    }
-    drawBody(g, def, cs, sk.burst, { oiled: sk.oiled, glaze });
+      g.setSauce(sk.sauce, mix(0xb04a2a, 0x1a0c08, dark), 0.5 + 0.35 * dark);
+    } else g.setSauce('none');
     const zones: [ReturnType<typeof sideZone>, ReturnType<typeof sideZone>] = [sideZone(sk.sides[0], def, m), sideZone(sk.sides[1], def, m)];
-    drawIndicators(g, def, zones, v.shownDown, cs, this.ringOn, sk.burst, { oiled: sk.oiled, sauce: sk.sauce });
+    v.ind.clear();
+    drawIndicators(v.ind, def, zones, v.shownDown, cs, this.ringOn, sk.burst, { oiled: sk.oiled, sauce: sk.sauce });
   }
 
   private doFlip(slot: number) {
@@ -958,8 +933,8 @@ export class ShiftScene extends Phaser.Scene {
   private addFlame(slot: number) {
     if (this.flames[slot]) return;
     const c = this.cell(slot);
-    const f = this.add.image(c.x + c.w / 2, c.y + c.h - this.coalH + 4, 'flame').setOrigin(0.5, 1).setDepth(8);
-    f.setScale(Math.min(1.6, c.w / 40));
+    const fs = Math.min(1.6, c.w / 40);
+    const f = this.add.image(c.x + c.w / 2, c.y + c.h - this.coalH + 4, 'fx-flame').setOrigin(0.5, 1).setDepth(8).setDisplaySize(28 * fs, 46 * fs);
     this.tweens.add({ targets: f, scaleY: f.scaleY * 1.25, scaleX: f.scaleX * 0.9, duration: 120, yoyo: true, repeat: -1 });
     this.flames[slot] = f;
   }
@@ -1025,16 +1000,14 @@ export class ShiftScene extends Phaser.Scene {
     }
 
     // held brush follows the pointer; auto-drop when idle
-    this.brushG.clear();
     if (this.brushMode && !this.over) {
       this.brushIdle += dt;
       if (this.brushIdle > COOKING.brush.brushIdleDropSec) this.setBrush(null);
-      else this.drawBrush(this.brushG, this.ptr.x, this.ptr.y - 6, this.brushMode, 6);
+      else this.heldBrush.setPosition(this.ptr.x, this.ptr.y - 2).setAngle(14);
     }
 
-    // coals
-    const g = this.coalG;
-    g.clear();
+    // coals: heat crossfades cold -> hot, glow + flicker
+    const fanC = fanSlot !== null ? this.cell(fanSlot) : null;
     for (let i = 0; i < this.n; i++) {
       const c = this.cell(i);
       const sk = this.grill.slots[i];
@@ -1042,18 +1015,14 @@ export class ShiftScene extends Phaser.Scene {
       let b = Phaser.Math.Clamp((heat - 0.6) / 0.8, 0, 1);
       if (fanSlot === i) b = Math.min(1, b + 0.35);
       if (sk && sk.flare > 0) b = 1;
-      const y0 = c.y + c.h - this.coalH;
-      g.fillStyle(mix(0x2a1a14, 0x6a2410, b), 1);
-      g.fillRect(c.x + 2, y0, c.w - 4, this.coalH - 2);
-      for (const em of this.embers[i]) {
-        const fl = 0.7 + 0.3 * Math.sin(time / 180 + em.ph);
-        g.fillStyle(mix(0xb02a10, 0xffb040, b), (0.25 + 0.75 * b) * fl);
-        g.fillCircle(em.x, em.y, em.r * (0.8 + 0.4 * b));
-      }
-      g.fillStyle(0xff8a2a, 0.08 + 0.2 * b);
-      g.fillRect(c.x + 2, y0 - 14, c.w - 4, 14);
-      if (fanSlot === i && Math.random() < 0.5) this.sparks.emitParticleAt(c.x + 8 + Math.random() * (c.w - 16), y0 + 4, 1);
+      const fl = 0.85 + 0.15 * Math.sin(time / 130 + i * 1.7) * Math.sin(time / 310 + i);
+      this.coals[i].hot.setAlpha(Math.min(1, b * fl + 0.05));
+      this.coals[i].glow.setAlpha((0.08 + 0.55 * b) * fl);
+      if (fanSlot === i && Math.random() < 0.5) this.sparks.emitParticleAt(c.x + 8 + Math.random() * (c.w - 16), c.y + c.h - this.coalH + 4, 1);
     }
+    if (fanC) {
+      this.fanImg.setVisible(true).setPosition(fanC.x + fanC.w / 2 + 14, fanC.y + fanC.h - this.coalH - 10).setAngle(-25 + Math.sin(time / 60) * 22);
+    } else this.fanImg.setVisible(false);
 
     // views, smoke, sizzle
     for (let i = 0; i < this.n; i++) {

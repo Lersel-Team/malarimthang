@@ -28,66 +28,31 @@ export function ringMax(def: ItemDef): number {
   return 1 + def.window + COOKING.burnMargin + 0.25;
 }
 
-/** Cook colour + blend strength for a cook value (raw -> golden -> charred -> black). */
-function cookTint(c: number, def: ItemDef): { col: number; k: number } {
+/**
+ * Maps a cook value to two art stages + crossfade (raw -> almost -> perfect -> charred -> burnt).
+ * Sprites show stage `a`, with stage `b` faded in by `t`.
+ */
+export function cookStages(c: number, def: ItemDef, margin: number = COOKING.burnMargin): { a: Zone; b: Zone; t: number } {
   const w = def.window;
-  const bm = COOKING.burnMargin;
-  const pts: [number, number, number][] = [
-    [0, 0, 0xffffff],
-    [ALMOST_FROM, 0.15, 0xffe9b0],
-    [1, 0.5, 0xe8b04a],
-    [1 + w, 0.55, 0xd9a040],
-    [1 + w + bm, 0.85, 0x4a2a14],
-    [ringMax(def), 1, 0x0c0a0a],
+  const pts: [number, Zone][] = [
+    [0, 'raw'],
+    [ALMOST_FROM * 0.9, 'almost'],
+    [1, 'perfect'],
+    [1 + w, 'perfect'],
+    [1 + w + margin * 0.6, 'charred'],
+    [1 + w + margin + 0.12, 'burnt'],
   ];
-  if (c <= 0) return { col: pts[0][2], k: 0 };
+  if (c <= 0) return { a: 'raw', b: 'raw', t: 0 };
   for (let i = 1; i < pts.length; i++) {
     if (c <= pts[i][0]) {
       const t = (c - pts[i - 1][0]) / (pts[i][0] - pts[i - 1][0]);
-      return { col: mix(pts[i - 1][2], pts[i][2], t), k: pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t };
+      return { a: pts[i - 1][1], b: pts[i][1], t: t < 0.02 ? 0 : t };
     }
   }
-  return { col: pts[pts.length - 1][2], k: 1 };
+  return { a: 'burnt', b: 'burnt', t: 0 };
 }
 
-/** Draws the chunks + stick, centred on (0,0), showing the given cook value. */
-export interface BodyFx {
-  oiled: boolean;
-  /** Glaze colour + alpha (null = no sauce). */
-  glaze: { col: number; alpha: number } | null;
-}
-
-export function drawBody(g: Phaser.GameObjects.Graphics, def: ItemDef, c: number, burst = false, fx?: BodyFx): void {
-  const { col, k } = cookTint(c, def);
-  const t = (base: number) => mix(base, col, k);
-  // stick
-  g.fillStyle(0xc89a5a, 1);
-  g.fillRect(-1.5, -BODY_H / 2 - 14, 3, BODY_H + 14);
-  g.fillTriangle(-1.5, BODY_H / 2, 1.5, BODY_H / 2, 0, BODY_H / 2 + 8);
-  const n = def.id === 'enoki' ? 3 : 4;
-  const pitch = (BODY_H - 24) / (n - 1);
-  for (let i = 0; i < n; i++) {
-    const y = -BODY_H / 2 + 12 + i * pitch;
-    if (burst) {
-      g.fillStyle(0xe8c040, 0.9);
-      g.fillEllipse(0, y, 30, 9);
-      continue;
-    }
-    drawChunk(g, def.id, y, t);
-    if (fx?.glaze) {
-      g.fillStyle(fx.glaze.col, fx.glaze.alpha);
-      g.fillRoundedRect(-13, y - 8, 26, 16, 6);
-    }
-    if (fx?.oiled) {
-      g.fillStyle(0xffffff, 0.6);
-      g.fillEllipse(-4, y - 4, 10, 4);
-      g.fillStyle(0xffffff, 0.35);
-      g.fillEllipse(5, y + 3, 6, 2.5);
-    }
-  }
-}
-
-
+/** LEGACY procedural icon (kept for MarketScene/art-ui until they adopt itemIcon from src/art/items.ts). */
 /** One chunk of an item (fish ball, pork slab, ...) centred at (0, y); t tints a base colour for doneness. */
 function drawChunk(g: Phaser.GameObjects.Graphics, id: string, y: number, t: (base: number) => number): void {
   switch (id) {

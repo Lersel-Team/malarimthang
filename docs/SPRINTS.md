@@ -64,13 +64,13 @@ Goal: day after day, with money that persists.
 
 **Done when:** you can play 5 days in a row, close the tab, and continue.
 
-## Sprint 4 — Look: graphics pass (owner request 2026-10-24: "improve graphic first")
+## Sprint 4 — Look: graphics pass ✅ (owner request 2026-10-24: "improve graphic first")
 Goal: the game looks like a finished cozy night-street game on a phone. Art is authored as SVG sprites rasterised at hi-DPI (docs/ART.md).
-- S4-1 `engine-dev`: crisp hi-DPI canvas (RES×), pointer mapping, real fonts (Kanit + Mali bundled), palette tokens, `loadSvg` helper, subtle vignette/bloom, ART.md. (in progress)
-- S4-2 `art-items`: SVG sprites for all 22 items (raw chunk + cooked-state treatment), stick, glass/cup with number tag, display box and trays, fryer pan + batter bowl, grill, coals, cooler, bin, water bottle, brushes; apply to the Shift scene's grill and tool area.
-- S4-3 `art-shop`: richer shop and street: stall with depth and lighting, bunting, string lights, queue area, waiting benches, stools and tables; customers redrawn with more detail (5 archetypes × walk/idle/pick/eat/happy/angry) and variety (skin, hair, outfit colours).
-- S4-4 `art-ui`: UI kit (buttons, cards, panels, toasts, badges, receipt paper, tickets), restyle Market, Summary and Name scenes, HUD, number-change juice, scene transitions.
-- S4-5 PM: screenshot review, consistency pass, Discord report.
+- [x] S4-1 `engine-dev`: crisp hi-DPI canvas (RES×), pointer mapping, real fonts (Kanit + Mali bundled), palette tokens, `loadSvg` helper, subtle vignette/bloom, ART.md. (in progress)
+- [x] S4-2 `art-items`: SVG sprites for all 22 items (raw chunk + cooked-state treatment), stick, glass/cup with number tag, display box and trays, fryer pan + batter bowl, grill, coals, cooler, bin, water bottle, brushes; apply to the Shift scene's grill and tool area.
+- [x] S4-3 `art-shop`: richer shop and street: stall with depth and lighting, bunting, string lights, queue area, waiting benches, stools and tables; customers redrawn with more detail (5 archetypes × walk/idle/pick/eat/happy/angry) and variety (skin, hair, outfit colours).
+- [x] S4-4 `art-ui`: UI kit (buttons, cards, panels, toasts, badges, receipt paper, tickets), restyle Market, Summary and Name scenes, HUD, number-change juice, scene transitions.
+- [x] S4-5 PM: screenshot review, consistency pass, Discord report.
 
 ## Sprint 5 — Self-service & fryer (owner request 2026-10-24)
 Goal: customers pick skewers from your display box into a numbered glass; you cook for them on the grill and the fryer. Design: GDD §4.6, §6.3.

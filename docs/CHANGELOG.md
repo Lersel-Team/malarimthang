@@ -1,5 +1,13 @@
 # Changelog
 
+## Sprint 4: Look, the graphics pass (2026-10-24)
+- Crisp hi-DPI canvas (RES x, up to 3x), bundled Kanit + Mali Thai fonts, palette + SVG sprite pipeline (`loadSvg`), subtle vignette, `docs/ART.md`.
+- Items: all 22 skewers as detailed SVG sprites with 5 cook stages, oil/sauce overlays; grill grate + coals, glass-front cooler, bin, bottle, brushes, shaker. Baked for Sprint 5: cup, bucket, display box, fry pan, batter bowl.
+- Shop: 8-layer night street (skyline, string lights, lantern awning, glowing sign, menu board, drinks fridge, display box), 5 customer archetypes x 8 variants x 12 frames, ambient motorbike/cat/moths.
+- UI kit (`src/art/ui.ts`): panels, buttons with press feedback, ribbons, pills, stars, bars, toasts, receipt paper, stamp, confetti; Boot/Name/Market/Summary/Shift tickets+HUD restyled; fades between scenes.
+- PM fixes: receipt stamp/stars overlap.
+- Dev pages: /art-items.html, /art-people.html, /ui-kit.html. 9 e2e specs.
+
 ## Sprint 3: Economy loop & saving (2026-10-24)
 - Day loop: Name (first launch) → Market → Shift → Summary → next day. Autosaves after every step.
 - Economy (`src/core/economy.ts`): seeded daily market (one cheap, one dear item), packs of 10 with caps, "refill like yesterday", rent/charcoal/wages, overnight spoilage (fridge), mum's 200 ฿ loan, rating, XP/levels, login streak. 41 tests.
