@@ -4,9 +4,11 @@ import Phaser from 'phaser';
 import { MAX_QUEUE, MAX_TICKETS } from '../../core/shift';
 import type { Customer, Shift, ShiftEvent } from '../../core/shift';
 import type { ArchetypeId } from '../../data/balance';
-import { FONT, mix } from '../grill/draw';
-import { ARCHS, FEET_Y, TEX_H, makePeopleTextures, personKey } from './people';
-import type { Pose } from './people';
+import { FONT } from '../grill/draw';
+import { RES } from '../../engine/hidpi';
+import { BULBS, LAMP, LANTERNS, sceneryLayers } from '../../art/shop';
+import { ARCHS, ORIGIN_Y, frameRef, variantOf, walkFrame } from './people';
+import type { FrameName } from './people';
 
 /** Height of the shop strip in the 360×740 layout (y = 0..SHOP_H). */
 export const SHOP_H = 250;
@@ -40,7 +42,9 @@ export function seatSpot(i: number): { x: number; y: number; tx: number; ty: num
   return { x: t.x + (side ? 17 : -17), y: t.y, tx: t.x, ty: t.y, side };
 }
 const STREET_Y = 238;
-const ORIGIN_Y = FEET_Y / TEX_H;
+/** Waiting bench (Sprint 5 waiting area) and the shop cat, strip coords (feet baseline). */
+export const BENCH = { x: 174, y: 192 };
+const CAT = { x: 140, y: 193 };
 
 interface Spr {
   id: number;
@@ -66,10 +70,17 @@ interface Spr {
   billX: number;
   billY: number;
   stomp: Phaser.GameObjects.Text | null;
+  variant: number;
+  walkPhase: number;
+  frame: string;
+  lastX: number;
+  lastY: number;
 }
 
 interface Passer {
   img: Phaser.GameObjects.Image;
+  beam?: Phaser.GameObjects.Image;
+  phase: number;
   vx: number;
   x: number;
   y: number;
@@ -112,7 +123,6 @@ export class ShopView {
     readonly h: number,
     readonly opts: ShopViewOptions,
   ) {
-    makePeopleTextures(scene);
     this.buildBackdrop();
     this.buildFurniture();
     this.buildAmbientStatic();
@@ -124,147 +134,67 @@ export class ShopView {
     return o;
   }
 
-  private addG(depth: number, blend?: Phaser.BlendModes): Phaser.GameObjects.Graphics {
-    const g = this.own(this.scene.add.graphics({ x: this.x, y: this.y }).setDepth(depth));
-    if (blend !== undefined) g.setBlendMode(blend);
-    return g;
+  private img(key: string, x: number, y: number, depth: number, ox = 0, oy = 0): Phaser.GameObjects.Image {
+    return this.own(this.scene.add.image(this.x + x, this.y + y, key).setOrigin(ox, oy).setScale(1 / RES).setDepth(depth));
   }
 
-  private glow(g: Phaser.GameObjects.Graphics, cx: number, cy: number, r: number, col: number, a: number) {
-    for (let i = r; i > 6; i -= 8) {
-      g.fillStyle(col, a);
-      g.fillCircle(cx, cy, i);
-    }
+  /** Soft light blob (additive), `w`/`h` in logical px. */
+  private light(x: number, y: number, w: number, h: number, tint: number, alpha: number, depth = -48): Phaser.GameObjects.Image {
+    return this.own(
+      this.scene.add.image(this.x + x, this.y + y, 'shop-glow').setDisplaySize(w, h).setTint(tint).setAlpha(alpha).setBlendMode(Phaser.BlendModes.ADD).setDepth(depth),
+    );
   }
 
   // ---------------------------------------------------------------- static art
-  private buildBackdrop() {
-    const g = this.addG(-50);
-    const { w } = this;
-    // sky
-    for (let i = 0; i < 16; i++) {
-      g.fillStyle(mix(0x120a1e, 0x5a3068, i / 15), 1);
-      g.fillRect(0, i * 10, w, 10);
-    }
-    g.fillStyle(0xfff0c8, 0.9);
-    g.fillCircle(46, 34, 12);
-    g.fillStyle(0x2a1840, 0.4);
-    g.fillCircle(42, 31, 10);
-    // skyline (left)
-    g.fillStyle(0x1c1426, 1);
-    for (let xx = 0, i = 0; xx < 160; xx += 34, i++) g.fillRect(xx, 62 + ((i * 37) % 36), 31, 120);
-    g.fillStyle(0xf6c870, 0.75);
-    for (let i = 0; i < 9; i++) g.fillRect(6 + ((i * 41) % 140), 80 + ((i * 29) % 60), 3, 4);
-    // wall behind eating area
-    g.fillStyle(0x2a1e30, 1);
-    g.fillRect(0, 124, 156, 56);
-    g.fillStyle(0x3a2a40, 1);
-    g.fillRect(0, 124, 156, 3);
-    // tarp over eating area
-    for (let i = 0; i < 6; i++) {
-      g.fillStyle(i % 2 ? 0xe8e0d0 : 0x3a7a9a, 1);
-      g.fillRect(i * 26, 104, 26, 14);
-      g.fillTriangle(i * 26, 118, i * 26 + 26, 118, i * 26 + 13, 128);
-    }
-    // shop building
-    g.fillStyle(0x2a1a22, 1);
-    g.fillRect(156, 44, w - 156, 140);
-    // warm interior
-    g.fillStyle(0x6a3a22, 1);
-    g.fillRect(166, 102, w - 166, 56);
-    g.fillStyle(0xa8642e, 0.7);
-    g.fillRect(166, 128, w - 166, 30);
-    // shelves + hanging skewers silhouette
-    g.fillStyle(0x3a2018, 1);
-    g.fillRect(172, 116, 70, 3);
-    g.fillRect(172, 134, 70, 3);
-    for (let i = 0; i < 8; i++) {
-      g.fillStyle(i % 2 ? 0xd9a040 : 0xe8d0a0, 1);
-      g.fillRect(176 + i * 8, 108 + (i % 3), 3, 7);
-      g.fillRect(176 + i * 8, 124, 5, 10);
-    }
-    g.fillStyle(0x201410, 1);
-    g.fillRect(300, 110, 44, 36); // pot
-    g.fillStyle(0xe8d0a0, 0.5);
-    g.fillEllipse(322, 110, 42, 6);
-    // awning stripes
-    for (let i = 0; i < 7; i++) {
-      g.fillStyle(i % 2 ? 0xf2e6d0 : 0xc0302a, 1);
-      g.fillRect(156 + i * 30, 80, 30, 18);
-      g.fillCircle(156 + i * 30 + 15, 98, 15 * 0.0 + 1);
-      g.fillTriangle(156 + i * 30, 98, 156 + i * 30 + 30, 98, 156 + i * 30 + 15, 108);
-    }
-    g.fillStyle(0x7a1c18, 1);
-    g.fillRect(156, 77, w - 156, 4);
-    // sign board
-    g.fillStyle(0x1a0e14, 1);
-    g.fillRoundedRect(186, 48, 150, 26, 6);
-    g.lineStyle(2, 0xff7a4a, 1);
-    g.strokeRoundedRect(186, 48, 150, 26, 6);
-    // ground: footpath, curb, street
-    g.fillStyle(0x2c2236, 1);
-    g.fillRect(0, 180, w, 52);
-    g.fillStyle(0x362a42, 1);
-    for (let xx = 0; xx < w; xx += 40) g.fillRect(xx, 182, 38, 22);
-    for (let xx = 20; xx < w; xx += 40) g.fillRect(xx, 206, 38, 24);
-    g.fillStyle(0x4a3e52, 1);
-    g.fillRect(0, 230, w, 5);
-    g.fillStyle(0x181220, 1);
-    g.fillRect(0, 235, w, this.h - 235);
-    g.fillStyle(0x3a3046, 1);
-    for (let xx = 8; xx < w; xx += 48) g.fillRect(xx, 246, 20, 2);
-    // counter
-    g.fillStyle(0x5a3a28, 1);
-    g.fillRect(196, 156, w - 196, 28);
-    g.fillStyle(0x8a5a38, 1);
-    g.fillRect(190, 150, w - 190, 8);
-    g.fillStyle(0xb88458, 0.6);
-    g.fillRect(190, 150, w - 190, 2);
-    g.fillStyle(0x3a2418, 1);
-    for (let xx = 206; xx < w; xx += 22) g.fillRect(xx, 160, 2, 24);
-    // lamp post + glass
-    g.fillStyle(0x2a2030, 1);
-    g.fillRect(126, 70, 3, 110);
-    g.fillRect(118, 68, 14, 3);
-    // spot markers on the floor
-    g.lineStyle(1, 0xf6c870, 0.18);
-    for (const s of TICKET_SPOTS) g.strokeEllipse(s.x, s.y, 26, 8);
+  private layerImgs: { img: Phaser.GameObjects.Image; x: number; k: number }[] = [];
 
-    // sign text
-    const sign = this.signText = this.own(
+  /** Shifts the far scenery layers horizontally (parallax-ready: sky 0.1, far skyline 0.2, near skyline 0.35). px in logical px. */
+  setParallax(px: number): void {
+    for (const l of this.layerImgs) l.img.x = this.x + l.x + px * l.k;
+  }
+
+  private buildBackdrop() {
+    const K: Record<string, number> = { 'shop-sky': 0.1, 'shop-skyline-far': 0.2, 'shop-skyline-near': 0.35 };
+    for (const l of sceneryLayers()) {
+      const img = this.img(l.key, l.x, l.y, l.depth);
+      this.layerImgs.push({ img, x: l.x, k: K[l.key] ?? 0 });
+    }
+
+    // sign text, drawn live on the clean glowing board
+    const sign = (this.signText = this.own(
       this.scene.add
-        .text(this.x + 261, this.y + 61, this.opts.shopName ?? 'หม่าล่าริมทาง', { fontFamily: FONT, fontSize: '15px', color: '#ffd9a0', stroke: '#ff5a2a', strokeThickness: 1 })
+        .text(this.x + SIGN_RECT.x + SIGN_RECT.w / 2, this.y + SIGN_RECT.y + SIGN_RECT.h / 2, this.opts.shopName ?? 'หม่าล่าริมทาง', { fontFamily: FONT, fontSize: '15px', color: '#ffd9a0', stroke: '#ff5a2a', strokeThickness: 1 })
         .setOrigin(0.5)
         .setDepth(-49),
-    );
+    ));
     this.setShopName(this.opts.shopName ?? 'หม่าล่าริมทาง');
     this.scene.tweens.add({ targets: sign, alpha: 0.82, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
 
-    // light
-    const l = this.addG(-48, Phaser.BlendModes.ADD);
-    this.glow(l, 128, 66, 70, 0xf6a04a, 0.045);
-    this.glow(l, 261, 61, 80, 0xff6a3a, 0.035);
-    this.glow(l, 262, 130, 90, 0xffa050, 0.04);
-    l.fillStyle(0xffe0a0, 0.9);
-    l.fillCircle(128, 66, 4);
-    l.fillStyle(0xffa050, 0.05);
-    l.fillEllipse(262, 205, 220, 40);
-    l.fillEllipse(70, 190, 130, 30);
-
-    // string lights
-    const sl = this.addG(-47);
-    sl.lineStyle(1, 0x120a1e, 1);
-    const pts: { x: number; y: number }[] = [];
-    for (let i = 0; i <= 12; i++) {
-      const px = (i / 12) * w;
-      pts.push({ x: px, y: 22 + 10 * Math.sin((i / 12) * Math.PI * 3) + 6 });
-    }
-    for (let i = 0; i < pts.length - 1; i++) sl.lineBetween(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y);
-    const cols = [0xff6a6a, 0xffd23a, 0x6ad0ff, 0xa0ff8a];
-    pts.forEach((p, i) => {
-      const c = this.own(this.scene.add.circle(this.x + p.x, this.y + p.y + 2, 2.4, cols[i % 4], 1).setDepth(-46));
-      this.scene.tweens.add({ targets: c, alpha: 0.35, duration: 700 + (i % 4) * 300, yoyo: true, repeat: -1, delay: i * 90 });
+    // light: lamp halo, sign, interior, ground pools, lantern + bulb glows
+    const lampHalo = this.light(LAMP.x, LAMP.y, 150, 150, 0xffa850, 0.55);
+    this.scene.tweens.add({ targets: lampHalo, alpha: 0.46, duration: 2300, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    this.light(LAMP.x, LAMP.y, 16, 16, 0xfff0c0, 1);
+    this.light(261, 61, 200, 70, 0xff6a3a, 0.22);
+    this.light(300, 128, 150, 70, 0xffa050, 0.28);
+    this.light(215, 156, 60, 70, 0x9ad8e8, 0.12);
+    this.light(128, 198, 210, 54, 0xffa050, 0.34);
+    this.light(298, 204, 230, 50, 0xff8a40, 0.3);
+    this.light(60, 196, 150, 40, 0xffd890, 0.16);
+    this.light(60, 120, 150, 40, 0xffd890, 0.16);
+    this.light(180, 200, 70, 30, 0xffd890, 0.1);
+    this.light(190, 226, 40, 10, 0xffb24a, 0.2);
+    this.light(60, 130, 130, 50, 0xffe0a0, 0.1, 280);
+    this.light(298, 200, 220, 46, 0xffa050, 0.07, 280);
+    LANTERNS.forEach((l, i) => {
+      const g = this.light(l.x, l.y, 46, 46, 0xff5a3a, 0.45);
+      this.scene.tweens.add({ targets: g, alpha: 0.3, duration: 1100 + i * 270, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: i * 200 });
     });
+    BULBS.forEach((b, i) => {
+      const c = parseInt(b.c.slice(1), 16);
+      const g = this.light(b.x, b.y, 26, 26, c, 0.55, -47);
+      this.scene.tweens.add({ targets: g, alpha: 0.2, duration: 700 + (i % 4) * 300, yoyo: true, repeat: -1, delay: i * 90 });
+    });
+    this.light(184, 70, 40, 40, 0xff7a4a, 0.25);
   }
 
   private buildFurniture() {
@@ -272,23 +202,75 @@ export class ShopView {
     const tablesNeeded = Math.ceil(n / 2);
     for (let t = 0; t < tablesNeeded; t++) {
       const tb = TABLES[t];
-      this.own(this.scene.add.image(this.x + tb.x, this.y + tb.y + 3, 'shop_table').setOrigin(0.5, 1).setDepth(tb.y + 3));
+      this.img('shop-table', tb.x, tb.y + 3, tb.y + 3, 0.5, 1);
     }
     for (let i = 0; i < n; i++) {
       const s = seatSpot(i);
-      this.own(this.scene.add.image(this.x + s.x, this.y + s.y + 1, 'shop_stool').setOrigin(0.5, 1).setDepth(s.y - 0.5));
+      this.img('shop-stool', s.x, s.y + 1, s.y - 0.5, 0.5, 1);
     }
+    // waiting bench against the stall wall (Sprint 5 waiting area)
+    this.img('shop-bench', BENCH.x, BENCH.y, BENCH.y, 0.5, 1);
   }
 
   private cat?: Phaser.GameObjects.Image;
+  private catZ?: Phaser.GameObjects.Text;
+  private catT = 12;
+  private catAwake = false;
+  private moths: { img: Phaser.GameObjects.Image; a: number; r: number; sp: number; ph: number }[] = [];
+  private wisps: Phaser.GameObjects.Image[] = [];
+  private rain: { img: Phaser.GameObjects.Image; vx: number; vy: number }[] = [];
+  private raining = false;
+
   private buildAmbientStatic() {
-    this.cat = this.own(this.scene.add.image(this.x + 152, this.y + 194, 'shop_cat').setOrigin(0.5, 1).setDepth(194));
-    const z = this.own(
-      this.scene.add.text(this.x + 160, this.y + 172, 'z', { fontFamily: FONT, fontSize: '9px', color: '#d8cce8' }).setDepth(260),
-    );
-    this.scene.tweens.add({ targets: z, y: z.y - 8, alpha: { from: 1, to: 0 }, duration: 1800, repeat: -1 });
-    this.scene.tweens.add({ targets: this.cat, scaleY: 1.06, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    this.cat = this.img('shop-cat-sleep', CAT.x, CAT.y, CAT.y, 0.5, 1);
+    this.catZ = this.own(this.scene.add.text(this.x + CAT.x + 8, this.y + CAT.y - 14, 'z', { fontFamily: FONT, fontSize: '9px', color: '#d8cce8' }).setDepth(260));
+    this.scene.tweens.add({ targets: this.catZ, y: this.catZ.y - 8, alpha: { from: 1, to: 0 }, duration: 1800, repeat: -1 });
+    this.scene.tweens.add({ targets: this.cat, scaleY: (1 / RES) * 1.05, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    for (let i = 0; i < 3; i++) {
+      const img = this.own(this.scene.add.image(this.x + LAMP.x, this.y + LAMP.y, 'shop-moth').setScale(1 / RES).setDepth(-46));
+      this.moths.push({ img, a: Math.random() * 6.28, r: 9 + Math.random() * 12, sp: 1.6 + Math.random() * 1.8, ph: Math.random() * 6 });
+    }
+    for (let i = 0; i < 5; i++) {
+      const w = this.own(this.scene.add.image(0, 0, 'shop-wisp').setScale(0.5 / RES * 2).setAlpha(0).setDepth(-45));
+      this.wisps.push(w);
+      this.scene.tweens.add({
+        targets: w, y: { from: this.y + 130, to: this.y + 96 }, x: { from: this.x + 338, to: this.x + 350 + (i % 2) * 6 },
+        alpha: { from: 0.7, to: 0 }, scale: { from: 0.4, to: 1.0 }, duration: 3400, repeat: -1, delay: i * 680, ease: 'Sine.out',
+      });
+    }
+    // rain streaks (off by default)
+    for (let i = 0; i < 46; i++) {
+      const img = this.own(this.scene.add.image(0, 0, 'shop-rain').setScale(1 / RES).setAlpha(0.45).setDepth(340).setVisible(false));
+      img.setRotation(0.12);
+      this.rain.push({ img, vx: -26, vy: 300 + Math.random() * 120 });
+      img.setPosition(this.x + Math.random() * this.w, this.y + Math.random() * 240);
+    }
   }
+
+  /** Cheap rain overlay (46 streaks). Off by default. */
+  setRain(on: boolean): void {
+    this.raining = on;
+    for (const r of this.rain) r.img.setVisible(on);
+  }
+
+  // ---------------------------------------------------------------- Sprint 5 hooks (no-ops for now)
+  /**
+   * Sprint 5: shows what is in the glass display box on the counter (DISPLAY_BOX in src/art/shop.ts, shop-strip
+   * coords 246,116,98x32). `trays` = one entry per item type with its stock; the view will draw skewers on the shelves.
+   */
+  showDisplayBox(_trays: { itemId: string; count: number }[]): void {}
+
+  /**
+   * Sprint 5: customer `id` walks to the display box and reaches in to pick skewers (uses the `pick` frame of the
+   * sheet: lean + arm toward the box) before they take their numbered glass to the waiting area.
+   */
+  customerPicks(_id: number): void {}
+
+  /**
+   * Sprint 5: lights the queue-number display (QDISPLAY in src/art/shop.ts, 200,108,32x17) with number `n`
+   * and plays a short ding highlight. The frame is drawn empty (dim dashes) for now.
+   */
+  callNumber(_n: number): void {}
 
   // ---------------------------------------------------------------- customers
   private queueRank(shift: Shift): Map<number, number> {
@@ -327,7 +309,9 @@ export class ShopView {
   }
 
   private makeSpr(c: Customer, rank: Map<number, number>): Spr {
-    const img = this.scene.add.image(0, 0, personKey(c.archetype, 'stand')).setOrigin(0.5, ORIGIN_Y);
+    const variant = variantOf(c);
+    const fr = frameRef(this.scene, c.archetype, variant, 'idle');
+    const img = this.scene.add.image(0, 0, fr.key, fr.frame).setOrigin(0.5, ORIGIN_Y).setScale(1 / RES);
     const bar = this.scene.add.graphics();
     const bubble = this.scene.add
       .text(0, 0, '', { fontFamily: FONT, fontSize: '10px', color: '#2a1a14', backgroundColor: '#fff3d6', padding: { x: 3, y: 1 } })
@@ -335,7 +319,7 @@ export class ShopView {
     const s: Spr = {
       id: c.id, arch: c.archetype, img, bar, bubble, bill: null, x: 0, y: 0, phase: c.phase, barKey: -1, bubbleStr: '#',
       shake: 0, happyT: 0, angryT: 0, phaseSeen: c.phase, moving: false, faceLeft: false, bobT: Math.random() * 6, fade: 0,
-      lastSeat: c.seat, billX: 0, billY: 0, stomp: null,
+      lastSeat: c.seat, billX: 0, billY: 0, stomp: null, variant, walkPhase: Math.random() * 4, frame: 'idle', lastX: 0, lastY: 0,
     };
     if (c.phase === 'walkIn') {
       s.x = c.id % 2 ? this.w + 24 : -24;
@@ -406,23 +390,31 @@ export class ShopView {
     s.angryT = Math.max(0, s.angryT - dt);
     s.shake = Math.max(0, s.shake - dt);
 
-    // pose
-    let pose: Pose = 'stand';
-    if (seated && !s.moving) pose = c.phase === 'eating' ? (Math.floor(this.time / 0.38 + s.id) % 2 ? 'sit1' : 'sit0') : 'sit0';
-    if (!seated || s.moving) {
-      if (s.happyT > 0) pose = 'happy';
-      if (s.angryT > 0 || (c.phase === 'leaving' && c.mood === 'angry')) pose = 'angry';
-    } else if (c.phase === 'bill' && s.happyT > 0) pose = 'sit0';
-    s.img.setTexture(personKey(s.arch, pose));
+    // frame: walk cycle paced by distance travelled, eat loop, happy / angry reactions
+    const moved = Math.hypot(s.x - s.lastX, s.y - s.lastY);
+    s.lastX = s.x;
+    s.lastY = s.y;
+    let frame: FrameName = 'idle';
+    const angry = s.angryT > 0 || (c.phase === 'leaving' && c.mood === 'angry');
+    if (s.moving) {
+      s.walkPhase += Math.min(moved / 7, 12 * dt);
+      frame = angry ? (Math.floor(this.time / 0.13 + s.id) & 1 ? 'angry1' : 'angry0') : s.happyT > 0 ? 'happy' : walkFrame(s.walkPhase);
+    } else if (seated) {
+      frame = c.phase === 'eating' ? (Math.floor(this.time / 0.45 + s.id) & 1 ? 'eat1' : 'eat0') : 'sit';
+    } else if (angry) frame = Math.floor(this.time / 0.2 + s.id) & 1 ? 'angry1' : 'angry0';
+    else if (s.happyT > 0) frame = 'happy';
+    if (frame !== s.frame || s.img.frame.name !== frame) {
+      const fr = frameRef(this.scene, s.arch, s.variant, frame);
+      s.img.setTexture(fr.key, fr.frame);
+      s.frame = frame;
+    }
     s.img.setFlipX(s.faceLeft);
 
     // bob / shake
     let oy = 0;
     let ox = 0;
-    if (s.moving) {
-      const angry = pose === 'angry';
-      oy = -Math.abs(Math.sin(s.bobT * (angry ? 14 : 11))) * (angry ? 3.5 : 2);
-    } else if (!seated) oy = Math.sin(s.bobT * 2.5) * 0.5;
+    if (s.moving) oy = frame.startsWith('walk') ? 0 : -Math.abs(Math.sin(s.bobT * 14)) * 2;
+    else if (!seated) oy = frame === 'happy' ? -Math.abs(Math.sin(s.bobT * 9)) * 2.5 : Math.sin(s.bobT * 2.5) * 0.5;
     if (s.shake > 0) ox = Math.sin(s.shake * 70) * 2.5;
     s.img.setPosition(this.x + s.x + ox, this.y + s.y + oy);
     s.img.setDepth(s.y);
@@ -467,11 +459,11 @@ export class ShopView {
     // bill icon
     if (c.phase === 'bill') {
       const sp = seatSpot(c.seat ?? s.lastSeat ?? 0);
-      if (!s.bill) s.bill = this.scene.add.image(0, 0, 'shop_bill').setOrigin(0.5, 1).setDepth(290);
+      if (!s.bill) s.bill = this.scene.add.image(0, 0, 'shop-bill').setOrigin(0.5, 1).setScale(1 / RES).setDepth(290);
       s.billX = sp.tx + (sp.side ? 7 : -7);
       s.billY = sp.ty - 14 + Math.sin(this.time * 5 + s.id) * 2.5;
       s.bill.setVisible(true).setPosition(this.x + s.billX, this.y + s.billY).setDepth(sp.ty + 20);
-      s.bill.setScale(1 + Math.sin(this.time * 5 + s.id) * 0.06);
+      s.bill.setScale((1 + Math.sin(this.time * 5 + s.id) * 0.06) / RES);
     } else if (s.bill) s.bill.setVisible(false);
   }
 
@@ -485,28 +477,63 @@ export class ShopView {
         const arch = ARCHS[Math.floor(Math.random() * ARCHS.length)];
         const dir = Math.random() < 0.5 ? 1 : -1;
         const y = 243 + Math.random() * 5;
-        const img = this.scene.add.image(0, 0, personKey(arch, 'stand')).setOrigin(0.5, ORIGIN_Y).setFlipX(dir < 0).setTint(0xa898b8).setAlpha(0.9);
-        this.passers.push({ img, vx: dir * (28 + Math.random() * 22), x: dir > 0 ? -24 : this.w + 24, y, t: Math.random() * 6, moto: false });
+        const fr = frameRef(this.scene, arch, Math.floor(Math.random() * 8), 'walk0');
+        // dark street silhouettes: tinted down so they read as people walking past in the dark
+        const img = this.scene.add.image(0, 0, fr.key, fr.frame).setOrigin(0.5, ORIGIN_Y).setScale(0.92 / RES).setFlipX(dir < 0).setTint(0x6a5a8a).setAlpha(0.85);
+        this.passers.push({ img, phase: Math.random() * 4, vx: dir * (28 + Math.random() * 22), x: dir > 0 ? -24 : this.w + 24, y, t: Math.random() * 6, moto: false });
       }
     }
     this.motoTimer -= dt;
     if (this.motoTimer <= 0) {
       this.motoTimer = 12 + Math.random() * 14;
       const dir = Math.random() < 0.5 ? 1 : -1;
-      const img = this.scene.add.image(0, 0, 'shop_moto').setOrigin(0.5, 0.95).setFlipX(dir < 0);
-      this.passers.push({ img, vx: dir * 170, x: dir > 0 ? -30 : this.w + 30, y: 240, t: 0, moto: true });
+      const img = this.scene.add.image(0, 0, 'shop-moto').setOrigin(0.5, 0.95).setScale(1 / RES).setFlipX(dir < 0);
+      const beam = this.scene.add.image(0, 0, 'shop-moto-beam').setOrigin(dir > 0 ? 0 : 1, 0.5).setScale(1 / RES).setFlipX(dir < 0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.8);
+      this.passers.push({ img, beam, phase: 0, vx: dir * 170, x: dir > 0 ? -34 : this.w + 34, y: 241, t: 0, moto: true });
     }
     for (let i = this.passers.length - 1; i >= 0; i--) {
       const p = this.passers[i];
       p.x += p.vx * dt;
       p.t += dt;
-      const bob = p.moto ? Math.sin(p.t * 40) * 0.6 : -Math.abs(Math.sin(p.t * 9)) * 2;
+      let bob: number;
+      if (p.moto) {
+        bob = Math.sin(p.t * 40) * 0.5;
+        if (p.beam) p.beam.setPosition(this.x + p.x + Math.sign(p.vx) * 24, this.y + p.y + bob - 17).setDepth(p.y + 1);
+      } else {
+        p.phase += Math.min(Math.abs(p.vx) / 7, 12) * dt;
+        const fr = walkFrame(p.phase);
+        if (p.img.frame.name !== fr) p.img.setFrame(fr);
+        bob = 0;
+      }
       p.img.setPosition(this.x + p.x, this.y + p.y + bob).setDepth(p.y);
-      if (p.x < -40 || p.x > this.w + 40) {
+      if (p.x < -50 || p.x > this.w + 50) {
         p.img.destroy();
+        p.beam?.destroy();
         this.passers.splice(i, 1);
       }
     }
+    // moths flutter around the lamp
+    for (const m of this.moths) {
+      m.a += m.sp * dt;
+      const r = m.r + Math.sin(this.time * 1.3 + m.ph) * 4;
+      m.img.setPosition(this.x + LAMP.x + Math.cos(m.a) * r, this.y + LAMP.y + Math.sin(m.a * 1.3 + m.ph) * r * 0.55 + 2);
+      m.img.setScale(1 / RES, (1 / RES) * (0.5 + 0.5 * Math.abs(Math.sin(this.time * 28 + m.ph))));
+    }
+    // cat sleeps, wakes up now and then
+    this.catT -= dt;
+    if (this.catT <= 0 && this.cat) {
+      this.catAwake = !this.catAwake;
+      this.catT = this.catAwake ? 5 + Math.random() * 4 : 14 + Math.random() * 12;
+      this.cat.setTexture(this.catAwake ? 'shop-cat-awake' : 'shop-cat-sleep');
+      this.catZ?.setVisible(!this.catAwake);
+    }
+    if (this.raining)
+      for (const r of this.rain) {
+        const im = r.img;
+        im.x += r.vx * dt;
+        im.y += r.vy * dt;
+        if (im.y > this.y + 244) im.setPosition(this.x + Math.random() * (this.w + 30), this.y - 8);
+      }
   }
 
   // ---------------------------------------------------------------- events
@@ -573,10 +600,10 @@ export class ShopView {
             ? { fontSize: '10px', color: '#b8b0c0', stroke: '#1a1420', strokeThickness: 2 }
             : { fontSize: '15px', color: '#ffe36a', stroke: '#5a3a00', strokeThickness: 3 }, small ? 18 : 34, small ? 900 : 1100);
           if (!small) {
-            const coin = this.scene.add.image(this.x + bx, this.y + by + 10, 'shop_bill').setDepth(320);
+            const coin = this.scene.add.image(this.x + bx, this.y + by + 10, 'shop-bill').setScale(1 / RES).setDepth(320);
             this.fx.add(coin);
             this.scene.tweens.add({
-              targets: coin, y: coin.y - 36, alpha: 0, scale: 1.3, duration: 700, ease: 'Cubic.out',
+              targets: coin, y: coin.y - 36, alpha: 0, scale: 1.3 / RES, duration: 700, ease: 'Cubic.out',
               onComplete: () => (this.fx.delete(coin), coin.destroy()),
             });
           }
@@ -625,7 +652,7 @@ export class ShopView {
       o.destroy();
     }
     for (const s of this.sprs.values()) this.killSpr(s);
-    for (const p of this.passers) p.img.destroy();
+    for (const p of this.passers) (p.img.destroy(), p.beam?.destroy());
     this.owned = [];
     this.fx.clear();
     this.sprs.clear();

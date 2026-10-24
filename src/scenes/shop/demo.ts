@@ -4,8 +4,9 @@ import { COLORS, GAME_H, GAME_W } from '../../config';
 import { Shift } from '../../core/shift';
 import type { Customer, ShiftEvent } from '../../core/shift';
 import { ITEMS, LOCATIONS } from '../../data/balance';
-import { pt, setupCamera } from '../../engine/hidpi';
+import { RES, pt, setupCamera } from '../../engine/hidpi';
 import { FONT } from '../grill/draw';
+import { bootTimings, preloadShop } from '../../art/shop';
 import { SHOP_H, ShopView } from './ShopView';
 
 const speed = Number(new URLSearchParams(location.search).get('speed')) || 1;
@@ -21,13 +22,20 @@ class DemoScene extends Phaser.Scene {
     super('demo');
   }
 
+  private ready_ = false;
+
   create() {
     setupCamera(this);
     this.cameras.main.setBackgroundColor(COLORS.night);
-    this.newShift();
+    void preloadShop(this).then(() => {
+      (window as unknown as { __bootMs: typeof bootTimings }).__bootMs = { ...bootTimings };
+      this.newShift();
+      this.ready_ = true;
+    });
     this.hud = this.add.text(8, SHOP_H + 8, '', { fontFamily: FONT, fontSize: '14px', color: COLORS.text }).setDepth(500);
     this.add.text(8, SHOP_H + 60, 'tap bills on tables to collect\nbot serves tickets after 3-10 s', { fontFamily: FONT, fontSize: '11px', color: '#8a7a90' });
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (!this.ready_) return;
       const q = pt(p);
       const id = this.view.billAt(q.x, q.y);
       if (id !== null) this.feed(this.shift.collect(id));
@@ -48,6 +56,7 @@ class DemoScene extends Phaser.Scene {
   }
 
   update(_t: number, ms: number) {
+    if (!this.ready_) return;
     const dt = (ms / 1000) * speed;
     const sh = this.shift;
     this.feed(sh.tick(dt));
@@ -79,12 +88,14 @@ class DemoScene extends Phaser.Scene {
   }
 }
 
-new Phaser.Game({
+const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
-  width: GAME_W,
-  height: GAME_H,
+  width: GAME_W * RES,
+  height: GAME_H * RES,
   backgroundColor: COLORS.night,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   scene: [DemoScene],
 });
+
+(window as unknown as { __game: Phaser.Game }).__game = game;
