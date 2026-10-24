@@ -3,6 +3,9 @@
 // Spec: docs/GDD.md §6, §6.1, §13. Numbers: data/balance.json → archetypes, locations, service, eatIn, shift, spice.
 import { ARCHETYPES, BALANCE, EAT_IN, ITEM_BY_ID, ITEMS, SERVICE, SHIFT, SPICE, type ArchetypeId, type LocationDef } from '../data/balance';
 import type { Rng } from './cooking';
+import { rollName, type NameOrigin } from './names';
+
+const nameFields = (n: { name: string; origin: NameOrigin }) => ({ name: n.name, nameOrigin: n.origin });
 
 /** Seconds a customer takes to walk from the street to the counter / to a seat / out. Views tween over these. */
 export const WALK_IN_SEC = 2.5;
@@ -63,6 +66,9 @@ export interface Customer {
   /** Money waiting on the table ('bill'), or paid at the counter for takeaway. */
   bill: number;
   mood: 'happy' | 'ok' | 'sad' | 'angry' | null;
+  /** Display name in Thai script (src/core/names.ts). */
+  name: string;
+  nameOrigin: NameOrigin;
   /** Pre-tip/combo amount of the bill (what auto-collect pays). */
   billBase: number;
   /** True once the seated customer has placed their one extra order. */
@@ -106,6 +112,8 @@ export interface ShiftOptions {
   patienceMult?: number; // seat grade
   spawnMult?: number; // sign
   rng: Rng;
+  /** Separate stream for cosmetic rolls (names) so they don't shift gameplay randomness. Default Math.random. */
+  nameRng?: Rng;
 }
 
 export const MAX_SHAKES = 9;
@@ -242,6 +250,7 @@ export class Shift {
     const eatIn = o.rng() < (EAT_IN.rateByArchetype[arch] ?? 0);
     const pMax = a.patienceSec * (o.patienceMult ?? 1);
     this.customers.push({
+      ...nameFields(rollName(this.opts.nameRng ?? Math.random, arch)),
       id: this.nextId++, archetype: arch, order: { lines, spice, eatIn }, phase: 'walkIn',
       phaseT: WALK_IN_SEC, patience: pMax, patienceMax: pMax, ticketSlot: null, ticket: null,
       seat: null, bill: 0, mood: null, billBase: 0, extraDone: false, isExtra: false, queueSeq: 0,

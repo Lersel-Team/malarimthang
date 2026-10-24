@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS, GAME_H, GAME_W } from '../config';
-import { ARCHETYPES, ITEMS, ITEM_BY_ID, LOCATIONS } from '../data/balance';
+import { ITEMS, ITEM_BY_ID, LOCATIONS } from '../data/balance';
 import {
   createGrill,
   extinguish,
@@ -392,7 +392,7 @@ export class ShiftScene extends Phaser.Scene {
       bg.fillRoundedRect(x, y, CARD_W, CARD_H, 8);
       bg.lineStyle(done ? 3 : 2, done ? 0xffd23a : 0x6a4a7a, 1);
       bg.strokeRoundedRect(x, y, CARD_W, CARD_H, 8);
-      card.content.push(this.txt(x + 6, y + 4, ARCHETYPES[c.archetype].th, 12, '#f6d8a0'));
+      card.content.push(this.txt(x + 6, y + 4, c.name, 13, '#f6d8a0'));
       const tag = this.txt(x + CARD_W - 5, y + 60, c.order.eatIn ? 'นั่งกิน' : 'กลับบ้าน', 10, c.order.eatIn ? '#8fd8a0' : '#9ab8f0').setOrigin(1, 0);
       card.content.push(tag);
       c.order.lines.forEach((l, k) => {
