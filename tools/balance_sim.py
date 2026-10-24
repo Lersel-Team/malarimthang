@@ -156,7 +156,7 @@ def buy_upgrades(s, last_profit):
             if lvl >= len(u["costs"]) or s.level < u.get("unlockLevel", 1):
                 continue
             prio = {"grillSize": 3, "powder": 2, "sign": 2, "seating": 1.5, "grillType": 1.5,
-                    "rack": 1, "fridge": 0.8, "helper": 1.2, "tables": 1.5}[uid]
+                    "rack": 1, "fridge": 0.8, "helper": 1.2, "tables": 1.5}.get(uid, 0.6)
             options.append((prio / u["costs"][lvl], u["costs"][lvl], "upg", uid))
         for iid, d in ITEMS.items():
             if iid not in s.items and s.level >= d["unlockLevel"]:

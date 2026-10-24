@@ -91,6 +91,17 @@ Controls: tap a brush to pick it up (it follows the finger), then tap or **swipe
 Look: oil = glossy sheen; sauce = red-brown glaze that darkens if burnt. Sound: soft wet brush strokes.
 Order of a skewer's life: **place → oil → cook side A → flip → cook side B → sauce → onto the ticket → mala powder (per ticket) → serve.**
 
+### 4.6 Fryer: ชุบแป้งทอด (second cooking method)
+A second station next to the grill, unlocked by the **กระทะทอด** upgrade (Lv3, 2 → 6 pan slots). Items list their `methods` in `balance.json`: `grill`, `fry` or both. Some items are fry-only (เต้าหู้ทอด, นักเก็ตไก่, มันม่วงทอด, ปีกไก่ทอด, กุ้งชุบแป้งทอด). Items that allow both are cooked the way the customer's cup says (ย่าง or ทอด icon), so a fryer owner sees extra orders for fried versions, priced ×1.25 (and more with better batter).
+
+Frying flow, one skewer: **หยิบ → ชุบแป้ง → ลงกระทะ → ยกขึ้นตอนสีทอง**
+1. **Batter (ชุบแป้ง):** drag the skewer into the batter bowl (or tap bowl then skewer); it takes `batterSec` (1 s) with a coating animation. Skipping the batter = "ไม่ชุบ" (×0.8 quality, like skipping oil on the grill).
+2. **Fry:** drop it into a free oil slot. It cooks one value 0 → done (no flipping): bubbles get faster and the coating turns pale → golden at the `bubbleCueAt` cue → deep brown → burnt. Window and burn margin come from the item and `fry.burnMargin`.
+3. **Lift:** tap to lift it out onto the cup/ticket. Lift too early = raw (like the grill), too late = burnt.
+**Oil temperature (the fryer's twist):** each skewer dropped in cools the oil by `tempDropPerItem` (12%). Cooking speed scales with temperature, and temperature recovers `tempRecoverPerSec`. Overloading the pan makes everything slow and soggy; the player learns to feed it in small batches. A thermometer shows it; a small "ทอดเบา ๆ" hint appears under 70%.
+**Upgrades:** pan slots (2 → 6), **สูตรแป้งทอด** batter (price ×1.1 / ×1.2 / ×1.3 for fried items, 3 levels).
+Later stations (steamer pot, drinks) reuse the same pattern: a station with slots, a preparation step, a cook step and a "done" cue.
+
 ### 4.4 Feedback (juice)
 Sizzle loudness and pitch follow the down side's `c`. A "ready to flip" ding plays at perfect (can be turned off in settings).
 Steam particles when perfect, smoke when charred, flame sprite on flare. Burnt skewer: small sad "ฟู่" sound.
@@ -168,6 +179,19 @@ Seat and decor upgrades are part of the upgrade shop (§8.1), but they're **visi
 | **ป้ายเมนูใหญ่** menu board | 1 | order size +1 for 30% of customers |
 
 Rule: every decor item has **one stat and a visible look**. Stats are shown on the card ("ลูกค้า +10%"). Effects are global in v1. Spatial effects like Soi Sizzle's "fan helps tables nearby" are a candidate for later.
+
+### 6.3 Self-service: display box, glass and queue numbers
+This replaces the "customer reads out an order" idea with how real mala stalls work: **customers pick their own raw skewers, you cook them.**
+
+**Before the shift (จัดตู้):** after the market, the player fills the **display box (ตู้โชว์)** from stock. The box has `displayBox` slots (4 → 12), one tray per item type, each tray holding up to `trayCap` skewers (10 → 30, upgrade **ถาดใหญ่**). Only items in the box can be picked, so the player decides what to show (variety draws customers: at least `box.variety.minItems` item types or arrivals slow down). Stock that doesn't fit stays in storage.
+**During the shift:**
+1. A customer walks to the box and **picks skewers into a glass (แก้ว)**, taking `pickSec` (3–5 s), one skewer at a time with a little animation. Counts drop live, so a tray can run out while someone is choosing (they take something else, or less).
+2. They walk to the counter. The glass gets a **queue number** (คิวที่ 12, writing on the cup, shown above their head and on the ticket) and goes onto the **kitchen rail** (up to `queue.maxCups` = 4 cups visible, more wait behind).
+3. The player **cooks** what is in the glass: tap a cup to load its skewers onto the grill or fryer (one tap per skewer, or "ใส่ทั้งแก้ว" if there is room), brush, flip, lift, then drop cooked skewers back into the glass. Items marked ทอด go to the fryer.
+4. Finished glass: season with mala powder to the spice level, tap **"เรียกคิว"**: the number is called out loud ("คิวที่ 12 ค่ะ!"), the customer walks over, pays, and goes to eat in or takes away.
+**Queue fairness:** serving a number while a lower number is still waiting makes the skipped customers' patience drain ×`queue.skipPatienceDrainMult` (1.3); serving in order gives a small tip bonus (`inOrderTipBonus`). So there is a real choice between speed and fairness.
+**Refill:** when a tray runs low, tap it to refill from storage (`refillSec` 1.5 s, you can't cook while refilling that one tap): a small, constant job that makes box size and tray size meaningful upgrades.
+Archetypes still decide who picks what (students: cheap processed; night-owls: meat and fried), now from what is actually in the box.
 
 ## 7. Economy & ecosystem
 

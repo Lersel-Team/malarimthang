@@ -64,22 +64,36 @@ Goal: day after day, with money that persists.
 
 **Done when:** you can play 5 days in a row, close the tab, and continue.
 
-## Sprint 4 — Upgrades & progression
-- S4-1 `core-dev`: upgrade effects, item/location unlocks, XP/levels.
-- S4-2 `engine-dev`: Upgrade shop (tabs, recommended next goal), level-up moment.
-- S4-5 `engine-dev`: **shop layout mode** between shifts: tap table/decor slots to buy, upgrade or swap; tables, seat grades and 7 decor items (GDD §6.2), each with one visible stat.
-- S4-3 `engine-dev`: gas grill knob, fan, holding rack, helper auto-flip.
-- S4-4 `balance`: tune to the GDD §8.3 targets, write `docs/balance-report.md`.
+## Sprint 4 — Look: graphics pass (owner request 2026-10-24: "improve graphic first")
+Goal: the game looks like a finished cozy night-street game on a phone. Art is authored as SVG sprites rasterised at hi-DPI (docs/ART.md).
+- S4-1 `engine-dev`: crisp hi-DPI canvas (RES×), pointer mapping, real fonts (Kanit + Mali bundled), palette tokens, `loadSvg` helper, subtle vignette/bloom, ART.md. (in progress)
+- S4-2 `art-items`: SVG sprites for all 22 items (raw chunk + cooked-state treatment), stick, glass/cup with number tag, display box and trays, fryer pan + batter bowl, grill, coals, cooler, bin, water bottle, brushes; apply to the Shift scene's grill and tool area.
+- S4-3 `art-shop`: richer shop and street: stall with depth and lighting, bunting, string lights, queue area, waiting benches, stools and tables; customers redrawn with more detail (5 archetypes × walk/idle/pick/eat/happy/angry) and variety (skin, hair, outfit colours).
+- S4-4 `art-ui`: UI kit (buttons, cards, panels, toasts, badges, receipt paper, tickets), restyle Market, Summary and Name scenes, HUD, number-change juice, scene transitions.
+- S4-5 PM: screenshot review, consistency pass, Discord report.
 
-**Done when:** 10 in-game days show clear progression, and the sim and a real playtest agree within ~20%.
+## Sprint 5 — Self-service & fryer (owner request 2026-10-24)
+Goal: customers pick skewers from your display box into a numbered glass; you cook for them on the grill and the fryer. Design: GDD §4.6, §6.3.
+- S5-1 `core-dev`: Shift model v2 (box state, pick phase, queue numbers, cup/ticket with raw skewers and methods, skip/in-order rules, refill) + tests; extend economy `GameState` with box layout; update balance sim.
+- S5-2 `core-dev`: fry rules in `src/core/frying.ts` (batter, oil temperature, doneness, burnt, quality) + tests.
+- S5-3 `engine-dev`: "จัดตู้" pre-shift scene and the in-shift display box with live counts and refill taps; picking animation into the glass; queue numbers on cups/customers.
+- S5-4 `engine-dev`: kitchen rail (cups with queue numbers), load-to-grill/fryer, return-to-cup, "เรียกคิว" call-out; fryer station UI (batter bowl, pans, thermometer, bubbles); SFX (oil sizzle, batter, call-out chime).
+- S5-5 `qa`: Playwright flow: stock box → customer picks → cook → call number; PM playtest and balance retune.
 
-## Sprint 5 — Content & ecosystem
+## Sprint 6 — Upgrades & progression
+- S6-1 `core-dev`: upgrade effects (incl. displayBox, tray, fryer, batter, grill, rack, fridge, powder, seating, sign, helper), item/location unlocks, XP/levels.
+- S6-2 `engine-dev`: **upgrade shop** with tabs เตา / เมนู / ร้าน / ทำเล, **new menu unlocks** (new skewers, fried items, new sauces), recommended next goal, readable lock reasons, level-up moment.
+- S6-3 `engine-dev`: gas grill knob, fan, holding rack, helper auto-flip.
+- S6-4 `engine-dev`: **shop layout mode** between shifts: tap table/decor slots to buy, upgrade or swap; tables, seat grades and 7 decor items (GDD §6.2).
+- S6-5 `balance`: tune to the GDD §8.3 targets; sim ↔ game drift report (carried over from S3-4).
+
+## Sprint 7 — Content & ecosystem
 - S5-1: all 17 skewers incl. special behaviours (cheese burst, chicken raw warning).
 - S5-2: 5 locations with their own backgrounds and crowd mix.
 - S5-3: event system + forecast (rain, football, payday, กินเจ, price spikes).
 - S5-4: customer reviews text pool (TH), reactions.
 
-## Sprint 6 — Polish, tutorial, ship v1.0 (guest)
+## Sprint 8 — Polish, tutorial, ship v1.0 (guest)
 - S6-1 `art-audio`: final art pass, lofi BGM, ambience, CREDITS.md.
 - S6-2: juice (particles, screen shake on flare, coin pops), settings screen.
 - S6-3: day-1 tutorial, boot/cover screen.
@@ -88,7 +102,7 @@ Goal: day after day, with money that persists.
 
 **Ship:** https://mala.papae.dev, guest play. Until then everything runs locally.
 
-## Sprint 7 — Google login & cloud save
+## Sprint 9 — Google login & cloud save
 - S7-1 `backend`: Supabase project, `profiles` + `saves` tables, row-level security.
 - S7-2: Google OAuth via Supabase Auth, boot choice "Google / Guest" (like Soi Sizzle).
 - S7-3: `SupabaseSave` + conflict rule (newest wins, keep a backup of the other), guest → Google linking that keeps progress.
@@ -96,7 +110,7 @@ Goal: day after day, with money that persists.
 
 **Needs from owner:** a Supabase account/project and a Google Cloud OAuth client (I'll give step-by-step instructions).
 
-## Sprint 8 (optional) — Social
+## Sprint 10 (optional) — Social
 Leaderboard (weekly revenue), visiting friends' stalls (`?visit=`), leaving reviews.
 
 ---
