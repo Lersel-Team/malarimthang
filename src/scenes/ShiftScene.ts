@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { COLORS, GAME_W } from '../config';
-import { ITEMS } from '../data/balance';
+import { COLORS, GAME_H, GAME_W } from '../config';
+import { ARCHETYPES, ITEMS, ITEM_BY_ID, LOCATIONS } from '../data/balance';
 import {
   createGrill,
   extinguish,
@@ -16,7 +16,9 @@ import {
   type Skewer,
 } from '../core/cooking';
 import { Sfx } from '../audio/sfx';
-import { BODY_H, FONT, drawBody, drawIndicators, makeTextures, mix, skewerSnapshot } from './grill/draw';
+import { MAX_TICKETS, Shift, type Customer, type ShiftEvent } from '../core/shift';
+import { SHOP_H, ShopView } from './shop/ShopView';
+import { BODY_H, FONT, drawBody, drawIndicators, makeTextures, mix } from './grill/draw';
 
 /** Number of grill slots. 4 for Sprint 1; 6-12 also lay out (6 per row). */
 export const SLOT_COUNT = 4;
@@ -24,11 +26,22 @@ const HEAT_EVENNESS = 0.55;
 const DRAG_PX = 10;
 
 // Layout
-const GRID_X = 16, GRID_W = 328, GRID_Y = 410, GRID_H = 158;
-const TRAY = { x: 12, y: 268, w: 336, h: 126 };
-const COOLER = { x: 8, y: 580, w: 240, h: 152 };
-const BIN = { x: 256, y: 600, w: 54, h: 80 };
-const WATER = { x: 318, y: 600, w: 34, h: 80 };
+const GRID_X = 16, GRID_W = 328, GRID_Y = 388, GRID_H = 150;
+const COOLER = { x: 8, y: 556, w: 240, h: 150 };
+const BIN = { x: 256, y: 576, w: 54, h: 80 };
+const WATER = { x: 318, y: 576, w: 34, h: 80 };
+const HUD_H = 28;
+const CARD_Y = SHOP_H + 4, CARD_W = 112, CARD_H = 122, CARD_GAP = 4, CARD_X0 = 8;
+const cardX = (i: number) => CARD_X0 + i * (CARD_W + CARD_GAP);
+const SHAKER = { dx: 4, dy: 78, w: 46, h: 26 };
+const MENU = ITEMS.filter((i) => i.unlockLevel === 1).slice(0, 4);
+
+interface Card {
+  bg: Phaser.GameObjects.Graphics;
+  bar: Phaser.GameObjects.Graphics;
+  content: Phaser.GameObjects.GameObject[];
+  sig: string;
+}
 
 interface View {
   sk: Skewer;
@@ -46,33 +59,33 @@ interface Gesture {
   ui?: () => void;
   dragging: boolean;
 }
-interface Served {
-  sk: Skewer;
-  q: number;
-}
 
 const inRect = (r: { x: number; y: number; w: number; h: number }, x: number, y: number) =>
   x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 
-export class GrillScene extends Phaser.Scene {
+export class ShiftScene extends Phaser.Scene {
   private grill!: Grill;
   private sfx!: Sfx;
   private views: (View | null)[] = [];
   private gestures = new Map<number, Gesture>();
-  private served: Served[] = [];
+  private shift!: Shift;
+  private shopView!: ShopView;
+  private cards: Card[] = [];
+  private over = false;
+  private hudClock!: Phaser.GameObjects.Text;
+  private hudMoney!: Phaser.GameObjects.Text;
+  private hudStar!: Phaser.GameObjects.Text;
+  private hudCombo!: Phaser.GameObjects.Text;
+  private overlay: Phaser.GameObjects.GameObject[] = [];
+  private powder!: Phaser.GameObjects.Particles.ParticleEmitter;
   private stats = { perfect: 0, ok: 0, burnt: 0, bin: 0 };
-  private qSum = 0;
   private ringOn = true;
   private waterMode = false;
   private coalG!: Phaser.GameObjects.Graphics;
-  private trayG!: Phaser.GameObjects.Graphics;
   private bottleG!: Phaser.GameObjects.Graphics;
-  private trayIcons: Phaser.GameObjects.GameObject[] = [];
   private flames: (Phaser.GameObjects.Image | null)[] = [];
   private smokeT: number[] = [];
   private lastSizzle: number[] = [];
-  private hudText!: Phaser.GameObjects.Text;
-  private heatText!: Phaser.GameObjects.Text;
   private ringBtn!: Phaser.GameObjects.Text;
   private muteBtn!: Phaser.GameObjects.Text;
   private toast!: Phaser.GameObjects.Text;
@@ -85,7 +98,7 @@ export class GrillScene extends Phaser.Scene {
   private fanning = new Set<number>();
 
   constructor() {
-    super('Grill');
+    super('Shift');
   }
 
   // ---- geometry ----
@@ -124,28 +137,29 @@ export class GrillScene extends Phaser.Scene {
     this.lastSizzle = Array(SLOT_COUNT).fill(-1);
     this.gestures.clear();
     this.fanning.clear();
-    this.served = [];
+    this.over = false;
+    this.overlay = [];
+    this.cards = [];
+    this.shift = new Shift({ location: LOCATIONS[0], menu: MENU.map((m) => m.id), seats: 2, rating: 3, rng: Math.random });
     this.stats = { perfect: 0, ok: 0, burnt: 0, bin: 0 };
-    this.qSum = 0;
     this.waterMode = false;
-    this.trayIcons = [];
 
     makeTextures(this);
-    this.drawBackdrop();
+    this.drawLowerBackdrop();
+    this.shopView = new ShopView(this, 0, 0, GAME_W, SHOP_H, { seats: 2 });
     this.drawGrillFrame();
     this.drawCooler();
     this.buildEmbers();
 
-    this.trayG = this.add.graphics();
     this.coalG = this.add.graphics().setDepth(1);
     this.bottleG = this.add.graphics();
-    this.drawTrayFrame();
     this.drawBinAndBottle();
     this.buildHud();
     this.buildParticles();
+    this.buildCards();
 
     this.toast = this.add
-      .text(GAME_W / 2, 378, '', { fontFamily: FONT, fontSize: '20px', color: '#fff', stroke: '#000', strokeThickness: 4 })
+      .text(GAME_W / 2, 380, '', { fontFamily: FONT, fontSize: '20px', color: '#fff', stroke: '#000', strokeThickness: 4 })
       .setOrigin(0.5)
       .setDepth(200)
       .setAlpha(0);
@@ -156,67 +170,21 @@ export class GrillScene extends Phaser.Scene {
     this.input.on('pointerupoutside', this.onUp, this);
     this.events.once('shutdown', () => {
       this.sfx.stopAll();
+      this.shopView.destroy();
       this.input.off('pointerdown', this.onDown, this);
       this.input.off('pointermove', this.onMove, this);
       this.input.off('pointerup', this.onUp, this);
       this.input.off('pointerupoutside', this.onUp, this);
     });
-    this.refreshTray();
+    this.refreshCards();
     this.refreshHud();
   }
 
   // ---- static drawing ----
-  private drawBackdrop() {
-    const g = this.add.graphics();
-    for (let i = 0; i < 13; i++) {
-      g.fillStyle(mix(0x120a1e, 0x4a2a5a, i / 12), 1);
-      g.fillRect(0, i * 20, GAME_W, 20);
-    }
-    g.fillStyle(0xfff0c8, 0.9);
-    g.fillCircle(50, 40, 14);
-    g.fillStyle(0x120a1e, 0.35);
-    g.fillCircle(45, 36, 12);
-    // skyline
-    g.fillStyle(0x1c1426, 1);
-    for (let x = 0, i = 0; x < GAME_W; x += 46, i++) g.fillRect(x, 70 + ((i * 37) % 40), 42, 120);
-    g.fillStyle(0xf6c870, 0.8);
-    for (let i = 0; i < 14; i++) g.fillRect(8 + ((i * 53) % 330), 84 + ((i * 29) % 70), 4, 5);
-    // lamp glow
-    for (let r = 90; r > 10; r -= 12) {
-      g.fillStyle(COLORS.lamp, 0.05);
-      g.fillCircle(296, 96, r);
-    }
-    g.fillStyle(0xffd890, 1);
-    g.fillCircle(296, 96, 7);
-    g.lineStyle(2, 0x3a2a3a, 1);
-    g.lineBetween(296, 60, 296, 96);
-    // stall awning
-    for (let i = 0; i < 12; i++) {
-      g.fillStyle(i % 2 ? 0xf2e6d0 : COLORS.mala, 1);
-      g.fillTriangle(i * 30, 112, i * 30 + 30, 112, i * 30 + 15, 136);
-      g.fillRect(i * 30, 98, 30, 14);
-    }
-    g.fillStyle(0x2a1a14, 1);
-    g.fillRect(0, 150, GAME_W, 36);
-    g.fillStyle(0x4a3226, 1);
-    g.fillRect(0, 150, GAME_W, 5);
-    this.add.text(GAME_W / 2, 168, 'หม่าล่าริมทาง', { fontFamily: FONT, fontSize: '16px', color: COLORS.text }).setOrigin(0.5);
-    // hud panel
-    g.fillStyle(0x000000, 0.45);
-    g.fillRoundedRect(8, 190, 344, 70, 8);
-    // lower background
+  private drawLowerBackdrop() {
+    const g = this.add.graphics().setDepth(-2);
     g.fillStyle(0x140d1c, 1);
-    g.fillRect(0, 262, GAME_W, 480).setDepth(-1);
-    g.setDepth(-2);
-  }
-
-  private drawTrayFrame() {
-    const g = this.trayG;
-    g.clear();
-    g.fillStyle(0x2a1d34, 1);
-    g.fillRoundedRect(TRAY.x, TRAY.y, TRAY.w, TRAY.h, 10);
-    g.lineStyle(2, 0x6a4a7a, 1);
-    g.strokeRoundedRect(TRAY.x, TRAY.y, TRAY.w, TRAY.h, 10);
+    g.fillRect(0, SHOP_H, GAME_W, GAME_H - SHOP_H);
   }
 
   private drawGrillFrame() {
@@ -314,31 +282,34 @@ export class GrillScene extends Phaser.Scene {
   }
 
   private buildHud() {
+    this.btns = [];
+    const bar = this.add.graphics().setDepth(90);
+    bar.fillStyle(0x000000, 0.55);
+    bar.fillRect(0, 0, GAME_W, HUD_H);
     const st = { fontFamily: FONT, fontSize: '13px', color: COLORS.text };
-    this.hudText = this.add.text(16, 194, '', { ...st, lineSpacing: 2 });
-    this.heatText = this.add.text(16, 240, '', { ...st, fontSize: '11px', color: '#c0a8b0' });
+    this.hudClock = this.add.text(8, 6, '', st).setDepth(91);
+    this.hudMoney = this.add.text(62, 6, '', { ...st, color: '#ffe27a' }).setDepth(91);
+    this.hudStar = this.add.text(140, 6, '', st).setDepth(91);
+    this.hudCombo = this.add.text(190, 6, '', { ...st, color: '#ff9a6a' }).setDepth(91);
     const btn = (x: number, label: string, fn: () => void) => {
       const t = this.add
-        .text(x, 8, label, { fontFamily: FONT, fontSize: '13px', color: '#fff', backgroundColor: '#5a3a6a', padding: { x: 7, y: 5 } })
+        .text(x, 3, label, { fontFamily: FONT, fontSize: '13px', color: '#fff', backgroundColor: '#5a3a6a', padding: { x: 6, y: 3 } })
         .setOrigin(1, 0)
-        .setDepth(20);
+        .setDepth(92);
       this.btns.push({ t, fn });
       return t;
     };
-    this.btns = [];
-    btn(352, 'เริ่มใหม่', () => {
-      this.scene.restart();
-    });
-    this.ringBtn = btn(284, 'วงสุก: เปิด', () => {
+    btn(356, '↻', () => this.scene.restart());
+    this.ringBtn = btn(326, '◎', () => {
       this.ringOn = !this.ringOn;
-      this.ringBtn.setText(this.ringOn ? 'วงสุก: เปิด' : 'วงสุก: ปิด');
+      this.ringBtn.setAlpha(this.ringOn ? 1 : 0.45);
     });
-    this.muteBtn = btn(200, 'เสียง: เปิด', () => {
+    this.muteBtn = btn(296, '♪', () => {
       this.sfx.muted = !this.sfx.muted;
-      this.muteBtn.setText(this.sfx.muted ? 'เสียง: ปิด' : 'เสียง: เปิด');
+      this.muteBtn.setAlpha(this.sfx.muted ? 0.45 : 1);
     });
-    this.muteBtn.setText(this.sfx.muted ? 'เสียง: ปิด' : 'เสียง: เปิด');
-    this.ringBtn.setText(this.ringOn ? 'วงสุก: เปิด' : 'วงสุก: ปิด');
+    this.muteBtn.setAlpha(this.sfx.muted ? 0.45 : 1);
+    this.ringBtn.setAlpha(this.ringOn ? 1 : 0.45);
   }
   private btns: { t: Phaser.GameObjects.Text; fn: () => void }[] = [];
 
@@ -349,6 +320,7 @@ export class GrillScene extends Phaser.Scene {
     this.smokeGrey = mk({ lifespan: 1200, speedY: { min: -45, max: -25 }, speedX: { min: -10, max: 10 }, scale: { start: 0.6, end: 1.8 }, alpha: { start: 0.55, end: 0 }, tint: 0x9a9a9a });
     this.smokeBlack = mk({ lifespan: 1600, speedY: { min: -55, max: -30 }, speedX: { min: -16, max: 16 }, scale: { start: 0.9, end: 2.6 }, alpha: { start: 0.8, end: 0 }, tint: 0x222222 });
     this.sparks = mk({ frame: 'spark', lifespan: 600, speedY: { min: -90, max: -40 }, speedX: { min: -30, max: 30 }, scale: { start: 0.9, end: 0 }, alpha: { start: 1, end: 0 }, tint: 0xffa030 });
+    this.powder = mk({ frame: 'spark', lifespan: 500, speed: { min: 30, max: 90 }, gravityY: 200, scale: { start: 1, end: 0.2 }, alpha: { start: 1, end: 0 }, tint: 0xd02a1a });
     this.splat = mk({ frame: 'spark', lifespan: 700, speed: { min: 40, max: 130 }, gravityY: 260, scale: { start: 1.4, end: 0.3 }, alpha: { start: 1, end: 0 }, tint: 0xf0c830 });
   }
 
@@ -364,38 +336,195 @@ export class GrillScene extends Phaser.Scene {
   }
 
   private refreshHud() {
-    const n = this.stats.perfect + this.stats.ok + this.stats.burnt;
-    const avg = n ? Math.round((this.qSum / n) * 100) : 0;
-    this.hudText.setText(
-      `เสิร์ฟสุกพอดี ${this.stats.perfect}  พอใช้ ${this.stats.ok}  ไหม้/เกรียม ${this.stats.burnt}\nคุณภาพเฉลี่ย ${n ? avg + '%' : '-'}   ทิ้งถัง ${this.stats.bin}`,
-    );
+    const sh = this.shift;
+    const avg = sh.avgStars();
+    this.hudClock.setText(sh.clock());
+    this.hudMoney.setText(`฿${Math.round(sh.money)}`);
+    this.hudStar.setText(`⭐${avg === null ? '-' : avg.toFixed(1)}`);
+    this.hudCombo.setText(sh.comboSteps > 0 ? `คอมโบ x${sh.comboSteps}` : '');
   }
 
-  private refreshTray() {
-    this.trayIcons.forEach((o) => o.destroy());
-    this.trayIcons = [];
-    if (this.served.length === 0) {
-      this.trayIcons.push(
-        this.add
-          .text(TRAY.x + TRAY.w / 2, TRAY.y + TRAY.h / 2, 'ลากไม้ที่สุกแล้วมาวางที่ถาด', { fontFamily: FONT, fontSize: '14px', color: '#6a5a78' })
-          .setOrigin(0.5),
-      );
-      return;
+  // ---- ticket rail ----
+  private buildCards() {
+    for (let i = 0; i < MAX_TICKETS; i++) {
+      const bg = this.add.graphics().setDepth(3);
+      const bar = this.add.graphics().setDepth(4);
+      this.cards.push({ bg, bar, content: [], sig: '' });
     }
-    const last = this.served.slice(-8);
-    last.forEach((s, i) => {
-      const col = i % 4, row = Math.floor(i / 4);
-      const x = TRAY.x + 42 + col * 84;
-      const y = TRAY.y + 8 + row * 58;
-      const def = item(s.sk);
-      const g = this.add.graphics({ x, y: y + 28 }).setScale(0.38).setAngle(90);
-      drawBody(g, def, s.sk.sides[s.sk.down]);
-      const lab = this.qualityLabel(s.q);
-      const t = this.add
-        .text(x + 26, y + 20, `${Math.round(s.q * 100)}%`, { fontFamily: FONT, fontSize: '14px', color: lab === 'perfect' ? '#ffd23a' : lab === 'ok' ? '#e8e0c8' : '#d06a50' })
-        .setOrigin(0, 0.5);
-      this.trayIcons.push(g, t);
+  }
+
+  private txt(x: number, y: number, s: string, size: number, color: string) {
+    const t = this.add.text(x, y, s, { fontFamily: FONT, fontSize: `${size}px`, color }).setDepth(5);
+    return t;
+  }
+
+  private cardSig(c: Customer | null): string {
+    if (!c || !c.ticket) return 'empty';
+    const filled = c.order.lines.map((l) => c.ticket!.skewers.filter((s) => s.itemId === l.itemId).length).join(',');
+    return `${c.id}|${filled}|${c.ticket.shakes}|${this.shift.isComplete(c.ticketSlot ?? 0)}`;
+  }
+
+  private refreshCards(force = false) {
+    for (let i = 0; i < MAX_TICKETS; i++) {
+      const card = this.cards[i];
+      const c = this.shift.atTicket(i);
+      const sig = this.cardSig(c);
+      if (!force && sig === card.sig) continue;
+      card.sig = sig;
+      card.content.forEach((o) => o.destroy());
+      card.content = [];
+      const x = cardX(i), y = CARD_Y;
+      const bg = card.bg;
+      bg.clear();
+      if (!c || !c.ticket) {
+        bg.fillStyle(0x1e1528, 1);
+        bg.fillRoundedRect(x, y, CARD_W, CARD_H, 8);
+        bg.lineStyle(1, 0x3a2c48, 1);
+        bg.strokeRoundedRect(x, y, CARD_W, CARD_H, 8);
+        card.content.push(this.txt(x + CARD_W / 2, y + CARD_H / 2, 'ว่าง', 14, '#4a3c58').setOrigin(0.5));
+        continue;
+      }
+      const done = this.shift.isComplete(i);
+      bg.fillStyle(done ? 0x3a3a22 : 0x2f2240, 1);
+      bg.fillRoundedRect(x, y, CARD_W, CARD_H, 8);
+      bg.lineStyle(done ? 3 : 2, done ? 0xffd23a : 0x6a4a7a, 1);
+      bg.strokeRoundedRect(x, y, CARD_W, CARD_H, 8);
+      card.content.push(this.txt(x + 6, y + 4, ARCHETYPES[c.archetype].th, 12, '#f6d8a0'));
+      const tag = this.txt(x + CARD_W - 5, y + 60, c.order.eatIn ? 'นั่งกิน' : 'กลับบ้าน', 10, c.order.eatIn ? '#8fd8a0' : '#9ab8f0').setOrigin(1, 0);
+      card.content.push(tag);
+      c.order.lines.forEach((l, k) => {
+        const have = c.ticket!.skewers.filter((s) => s.itemId === l.itemId).length;
+        const col = k % 2, row = Math.floor(k / 2);
+        const lx = x + 4 + col * 54, ly = y + 24 + row * 24;
+        const def = ITEM_BY_ID[l.itemId];
+        const ic = this.add.graphics({ x: lx + 12, y: ly + 10 }).setDepth(5).setScale(0.2).setAngle(90);
+        drawBody(ic, def, 1);
+        card.content.push(ic);
+        const full = have >= l.qty;
+        card.content.push(this.txt(lx + 26, ly + 2, `${Math.min(have, l.qty)}/${l.qty}`, 13, full ? '#8fe08f' : '#fff'));
+      });
+      const sp = c.order.spice;
+      card.content.push(this.txt(x + 6, y + 58, sp === 0 ? 'ไม่เผ็ด' : '🌶'.repeat(sp), 12, '#ff9a8a'));
+      const by = y + SHAKER.dy;
+      bg.fillStyle(0xa02820, 1);
+      bg.fillRoundedRect(x + SHAKER.dx, by, SHAKER.w, SHAKER.h, 6);
+      card.content.push(this.txt(x + SHAKER.dx + SHAKER.w / 2, by + SHAKER.h / 2, 'ผง', 13, '#fff').setOrigin(0.5));
+      if (sp > 0 || c.ticket.shakes > 0) {
+        const okShake = c.ticket.shakes === sp;
+        card.content.push(this.txt(x + 54, by + 5, `${c.ticket.shakes}/${sp}`, 13, okShake ? '#8fe08f' : '#f0c8a0'));
+      }
+      if (done) {
+        card.content.push(this.txt(x + CARD_W - 6, by + 3, 'ส่ง ▶', 15, '#ffe27a').setOrigin(1, 0));
+      }
+    }
+  }
+
+  private drawBars() {
+    for (let i = 0; i < MAX_TICKETS; i++) {
+      const g = this.cards[i].bar;
+      g.clear();
+      const c = this.shift.atTicket(i);
+      if (!c || !c.ticket) continue;
+      const f = Phaser.Math.Clamp(c.patience / c.patienceMax, 0, 1);
+      const x = cardX(i) + 6, y = CARD_Y + CARD_H - 11, w = CARD_W - 12;
+      g.fillStyle(0x000000, 0.5);
+      g.fillRoundedRect(x, y, w, 6, 3);
+      g.fillStyle(f > 0.6 ? 0x5ac86a : f > 0.3 ? 0xe8c040 : 0xe05040, 1);
+      g.fillRoundedRect(x, y, Math.max(2, w * f), 6, 3);
+    }
+  }
+
+  private cardAt(x: number, y: number): number {
+    if (y < CARD_Y || y > CARD_Y + CARD_H) return -1;
+    for (let i = 0; i < MAX_TICKETS; i++) if (x >= cardX(i) && x <= cardX(i) + CARD_W) return i;
+    return -1;
+  }
+
+  private shakeSlot(slot: number) {
+    if (!this.shift.atTicket(slot)) return;
+    this.shift.shake(slot);
+    this.sfx.shake();
+    this.powder.emitParticleAt(cardX(slot) + SHAKER.dx + SHAKER.w / 2, CARD_Y + SHAKER.dy, 8);
+    this.refreshCards();
+  }
+
+  private serveSlot(slot: number) {
+    const c = this.shift.atTicket(slot);
+    if (!c || !this.shift.isComplete(slot)) return;
+    const eatIn = c.order.eatIn;
+    const events = this.shift.serve(slot);
+    this.pushEvents(events);
+    this.sfx.coin();
+    if (!eatIn) {
+      const e = events.find((ev) => ev.type === 'served');
+      if (e && e.type === 'served') this.floatText(cardX(slot) + CARD_W / 2, CARD_Y + 20, `+฿${Math.round(e.pay + e.tip + e.combo)}`, '#ffe27a');
+    }
+    this.refreshCards();
+  }
+
+  private floatText(x: number, y: number, s: string, color: string) {
+    const t = this.add.text(x, y, s, { fontFamily: FONT, fontSize: '18px', color, stroke: '#000', strokeThickness: 4 }).setOrigin(0.5).setDepth(150);
+    this.tweens.add({ targets: t, y: y - 40, alpha: 0, duration: 1100, ease: 'Cubic.Out', onComplete: () => t.destroy() });
+  }
+
+  private pushEvents(events: ShiftEvent[]) {
+    if (events.length === 0) return;
+    this.shopView.onEvents(events, this.shift);
+    for (const e of events) {
+      if (e.type === 'served' && e.combo > 0) {
+        const t = this.add
+          .text(GAME_W / 2, 52, `คอมโบ x${this.shift.comboSteps} +฿${Math.round(e.combo)}`, { fontFamily: FONT, fontSize: '20px', color: '#ff9a6a', stroke: '#000', strokeThickness: 4 })
+          .setOrigin(0.5)
+          .setDepth(150);
+        this.tweens.add({ targets: t, y: 36, alpha: 0, delay: 500, duration: 700, onComplete: () => t.destroy() });
+      } else if (e.type === 'end') {
+        this.endShift();
+      }
+    }
+  }
+
+  private endShift() {
+    if (this.over) return;
+    this.over = true;
+    this.gestures.clear();
+    this.fanning.clear();
+    for (let i = 0; i < SLOT_COUNT; i++) this.sfx.setSizzle(i, 0);
+    const L = this.shift.ledger;
+    const avg = this.shift.avgStars();
+    const rows: [string, string][] = [
+      ['ยอดขาย', `฿${Math.round(L.sales)}`],
+      ['ทิป', `฿${Math.round(L.tips)}`],
+      ['คอมโบ', `฿${Math.round(L.combo)}`],
+      ['รวมเงิน', `฿${Math.round(this.shift.money)}`],
+      ['ลูกค้าที่เสิร์ฟ', `${L.served}`],
+      ['ลูกค้าเดินหนี', `${L.walkouts}`],
+      ['คะแนนเฉลี่ย', avg === null ? '-' : `⭐ ${avg.toFixed(1)}`],
+      ['ไม้สุกพอดี', `${this.stats.perfect}`],
+      ['ไม้พอใช้', `${this.stats.ok}`],
+      ['ไม้ไหม้/เกรียม', `${this.stats.burnt}`],
+    ];
+    const o = this.overlay;
+    const dim = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.7).setOrigin(0).setDepth(300).setInteractive();
+    const g = this.add.graphics().setDepth(301);
+    const px = 30, py = 110, pw = 300, ph = 460;
+    g.fillStyle(0xf4ecd8, 1);
+    g.fillRoundedRect(px, py, pw, ph, 10);
+    o.push(dim, g);
+    const T = (x: number, y: number, s: string, size: number, color: string) => this.add.text(x, y, s, { fontFamily: FONT, fontSize: `${size}px`, color }).setDepth(302);
+    o.push(T(GAME_W / 2, py + 14, 'สรุปยอด', 26, '#3a2a20').setOrigin(0.5, 0));
+    o.push(T(GAME_W / 2, py + 50, '- - - - - - - - - - - - - - -', 14, '#8a7a68').setOrigin(0.5, 0));
+    rows.forEach(([k, v], i) => {
+      const y = py + 80 + i * 30 + (i >= 4 ? 8 : 0) + (i >= 7 ? 8 : 0);
+      const big = i === 3;
+      o.push(T(px + 20, y, k, big ? 20 : 16, '#3a2a20'));
+      o.push(T(px + pw - 20, y, v, big ? 20 : 16, big ? '#b02a1a' : '#3a2a20').setOrigin(1, 0));
     });
+    const b = this.add
+      .text(GAME_W / 2, py + ph - 56, 'เปิดร้านอีกรอบ', { fontFamily: FONT, fontSize: '20px', color: '#fff', backgroundColor: '#c0302a', padding: { x: 18, y: 10 } })
+      .setOrigin(0.5, 0)
+      .setDepth(302);
+    o.push(b);
+    this.btns.push({ t: b, fn: () => this.scene.restart() });
   }
 
   // ---- views ----
@@ -471,9 +600,22 @@ export class GrillScene extends Phaser.Scene {
     this.sfx.unlock();
     const g: Gesture = { mode: 'ui', sx: p.x, sy: p.y, slot: -1, dragging: false };
     const btn = this.btns.find((b) => b.t.getBounds().contains(p.x, p.y));
-    if (btn) {
+    if (this.over) {
+      if (btn) g.ui = btn.fn;
+    } else if (btn) {
       g.mode = 'ui';
       g.ui = btn.fn;
+    } else if (p.y < SHOP_H) {
+      const id = this.shopView.billAt(p.x, p.y);
+      if (id !== null) {
+        this.pushEvents(this.shift.collect(id));
+        this.sfx.coin();
+      }
+    } else if (this.cardAt(p.x, p.y) >= 0) {
+      const i = this.cardAt(p.x, p.y);
+      const lx = p.x - cardX(i), ly = p.y - CARD_Y;
+      if (lx >= SHAKER.dx && lx <= SHAKER.dx + SHAKER.w && ly >= SHAKER.dy && ly <= SHAKER.dy + SHAKER.h) g.ui = () => this.shakeSlot(i);
+      else g.ui = () => this.serveSlot(i);
     } else if (inRect(WATER, p.x, p.y)) {
       g.mode = 'bottle';
     } else {
@@ -570,21 +712,26 @@ export class GrillScene extends Phaser.Scene {
       this.refreshHud();
       return;
     }
-    if (inRect(TRAY, x, y) || y < GRID_Y - 10) {
+    const slotT = this.cardAt(x, y);
+    if (slotT >= 0) {
       const q = skewerQuality(v.sk);
       if (q === null) {
         this.say(v.sk.burst ? 'แตกแล้ว! ทิ้งถังนะ' : 'ยังดิบ!');
         this.snapBack(v);
         return;
       }
-      const sk = removeSkewer(this.grill, slot);
+      const itemId = v.sk.itemId;
+      if (!this.shift.atTicket(slotT) || !this.shift.canAdd(slotT, itemId)) {
+        this.say('ลูกค้าไม่ได้สั่ง');
+        this.snapBack(v);
+        return;
+      }
+      removeSkewer(this.grill, slot);
       this.destroyView(slot);
-      if (!sk) return;
-      this.sfx.coin();
-      this.served.push({ sk: skewerSnapshot(sk), q });
+      this.shift.addSkewer(slotT, { itemId, quality: q });
+      this.sfx.place();
       this.stats[this.qualityLabel(q)]++;
-      this.qSum += q;
-      this.refreshTray();
+      this.refreshCards();
       this.refreshHud();
       return;
     }
@@ -655,8 +802,15 @@ export class GrillScene extends Phaser.Scene {
   // ---- loop ----
   update(time: number, deltaMs: number) {
     const dt = Math.min(deltaMs / 1000, 0.1);
-    const fan = [...this.gestures.values()].find((g) => g.mode === 'fan');
+    const fan = this.over ? undefined : [...this.gestures.values()].find((g) => g.mode === 'fan');
     const fanSlot = fan ? fan.slot : null;
+    if (!this.over) {
+      this.pushEvents(this.shift.tick(dt));
+    }
+    this.shopView.update(dt, this.shift);
+    this.refreshCards();
+    this.drawBars();
+    this.refreshHud();
     const events = tick(this.grill, dt, Math.random, { fanSlot });
     this.syncViews();
     for (const e of events) this.handleEvent(e);
@@ -713,6 +867,5 @@ export class GrillScene extends Phaser.Scene {
         this.sfx.setSizzle(i, level);
       }
     }
-    this.heatText.setText('ความร้อนช่อง: ' + this.grill.heat.map((h) => h.toFixed(2)).join('  '));
   }
 }

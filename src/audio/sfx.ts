@@ -112,6 +112,13 @@ export class Sfx {
     this.tone({ f0: 2093, dur: 0.5, gain: 0.12, type: 'square', attack: 0.002, delay: 0.07 });
   }
 
+  shake(): void {
+    // soft rattle of powder: a few short highpass-noise ticks
+    for (let i = 0; i < 4; i++) {
+      setTimeout(() => this.burst({ dur: 0.03, type: 'highpass', f0: 3500 + Math.random() * 3000, q: 0.6, gain: 0.12, attack: 0.002 }), i * 45 + Math.random() * 20);
+    }
+  }
+
   // ---- internals ----
 
   private makeNoise(ctx: Ctx): AudioBuffer {

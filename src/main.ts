@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS, GAME_H, GAME_W } from './config';
-import { GrillScene } from './scenes/GrillScene';
+import { ShiftScene } from './scenes/ShiftScene';
 
 new Phaser.Game({
   type: Phaser.AUTO,
@@ -10,5 +10,5 @@ new Phaser.Game({
   backgroundColor: COLORS.night,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   input: { activePointers: 2 },
-  scene: [GrillScene],
+  scene: [ShiftScene],
 });
