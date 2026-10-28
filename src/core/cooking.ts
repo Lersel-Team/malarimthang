@@ -43,6 +43,8 @@ export type GrillEvent =
 export interface TickOptions {
   /** Slot being fanned this tick (heat × 1.5), if any. */
   fanSlot?: number | null;
+  /** Several slots fanned at once (fan covers an area, not one slot). */
+  fanSlots?: ReadonlySet<number>;
 }
 
 /** Deterministic RNG in [0, 1). Pass Math.random in the game, a seeded one in tests. */
@@ -142,7 +144,7 @@ export function tick(grill: Grill, dt: number, rng: Rng, opts?: TickOptions): Gr
     const d = s.down;
     const margin = effectiveMargin(s);
     const before = sideZone(s.sides[d], def, margin);
-    const fan = fanSlot === slot ? 1.5 : 1;
+    const fan = fanSlot === slot || opts?.fanSlots?.has(slot) ? 1.5 : 1;
     const fl = s.flare > 0 ? COOKING.flareHeatMult : 1;
     s.sides[d] += (grill.heat[slot] * fan * fl * dt) / def.sideTime;
     const after = sideZone(s.sides[d], def, margin);

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { newGame, createMarket, buyPacks, suggestRefill, endDay, takeLoan, xpForLevel, type GameState, type ShiftResult, type Market } from '../src/core/economy';
 import type { Rng } from '../src/core/cooking';
 import { ITEM_BY_ID, SHIFT, MARKET, LOCATIONS, UPGRADES } from '../src/data/balance';
+const CH = SHIFT.charcoalPerShift;
 
 function mulberry32(a: number): Rng {
   return () => {
@@ -147,10 +148,10 @@ describe('endDay money/profit', () => {
     const { state, summary } = endDay(g, res({ sales: 200, tips: 10, combo: 5, sold: { fishball: 15 }, wasted: { fishball: 2 } }), '2026-01-02');
     expect(summary.revenue).toBe(215);
     expect(summary.ingredientCost).toBe(34);
-    expect(summary).toMatchObject({ rent: 40, charcoal: 30, wages: 0 });
+    expect(summary).toMatchObject({ rent: 40, charcoal: CH, wages: 0 });
     expect(summary.spoilage).toBe(4); // 3 left, 1 kept, 2 rot at 2
-    expect(summary.profit).toBeCloseTo(215 - 34 - 40 - 30 - summary.spoilage, 5);
-    expect(state.money).toBe(300 + 215 - 40 - 30);
+    expect(summary.profit).toBeCloseTo(215 - 34 - 40 - CH - summary.spoilage, 5);
+    expect(state.money).toBe(300 + 215 - 40 - CH);
     expect(state.day).toBe(2);
   });
   it('spoilage value is exact', () => {
@@ -161,11 +162,11 @@ describe('endDay money/profit', () => {
   it('charcoal discount and helper wages', () => {
     const base = newGame().upgrades;
     const a = endDay(withStock({ upgrades: { ...base, grillType: 2 } }), res(), 'x').summary;
-    expect(a.charcoal).toBe(18);
+    expect(a.charcoal).toBeCloseTo(CH * 0.6);
     const b = endDay(withStock({ upgrades: { ...base, grillType: 1, helper: 2 } }), res(), 'x').summary;
-    expect(b.charcoal).toBe(30);
+    expect(b.charcoal).toBe(CH);
     expect(b.wages).toBe(wage[2]);
-    expect(endDay(withStock({ upgrades: { ...base, helper: 2 } }), res(), 'x').state.money).toBe(300 - 40 - 30 - wage[2]);
+    expect(endDay(withStock({ upgrades: { ...base, helper: 2 } }), res(), 'x').state.money).toBe(300 - 40 - CH - wage[2]);
   });
   it('rent per location', () => {
     for (const l of LOCATIONS) {
@@ -173,11 +174,11 @@ describe('endDay money/profit', () => {
     }
   });
   it('profit may be negative', () => {
-    expect(endDay(newGame(), res(), 'x').summary.profit).toBe(-70);
+    expect(endDay(newGame(), res(), 'x').summary.profit).toBe(-(40 + CH));
   });
   it('falls back to item cost without basis', () => {
     const g = withStock({ stock: { porkbelly: 10 } });
-    expect(endDay(g, res({ sold: { porkbelly: 10 } }), 'x').summary.ingredientCost).toBe(60);
+    expect(endDay(g, res({ sold: { porkbelly: 10 } }), 'x').summary.ingredientCost).toBe(10 * ITEM_BY_ID.porkbelly.cost);
   });
   it('clears bought and decreases stock floor 0', () => {
     const g = withStock({ stock: { enoki: 5 }, bought: { enoki: 1 } });
@@ -192,7 +193,7 @@ describe('spoilage', () => {
     const g = withStock({ stock: { porkbelly: 10 } });
     const { state, summary } = endDay(g, res(), 'x');
     expect(state.stock).toEqual({});
-    expect(summary.spoilage).toBe(60);
+    expect(summary.spoilage).toBe(10 * ITEM_BY_ID.porkbelly.cost);
   });
   it('veg/processed keep 40%', () => {
     const { state } = endDay(withStock({ stock: { enoki: 10, fishball: 20 } }), res(), 'x');
@@ -204,7 +205,7 @@ describe('spoilage', () => {
     const { state, summary } = endDay(g, res(), 'x');
     expect(state.stock.porkbelly).toBe(15);
     expect(state.stock.fishball).toBe(5 + Math.floor(10 * 0.4));
-    expect(summary.spoilage).toBe(6 * 2);
+    expect(summary.spoilage).toBe(6 * ITEM_BY_ID.fishball.cost);
   });
   it('fridge rolls over remaining space into cheaper items', () => {
     const upgrades = { ...newGame().upgrades, fridge: 1 };
@@ -216,13 +217,14 @@ describe('spoilage', () => {
 describe('loan repay', () => {
   it('repays 20% of profit', () => {
     const g = withStock({ loan: 200 });
-    const { state, summary } = endDay(g, res({ sales: 570 }), 'x'); // profit 500
+    const sales = 500 + 40 + CH;
+    const { state, summary } = endDay(g, res({ sales }), 'x'); // profit 500
     expect(summary.loanRepaid).toBe(100);
     expect(state.loan).toBe(100);
-    expect(state.money).toBe(300 + 570 - 70 - 100);
+    expect(state.money).toBe(300 + sales - 40 - CH - 100);
   });
   it('capped at loan, none on loss', () => {
-    expect(endDay(withStock({ loan: 10 }), res({ sales: 570 }), 'x').summary.loanRepaid).toBe(10);
+    expect(endDay(withStock({ loan: 10 }), res({ sales: 540 + CH }), 'x').summary.loanRepaid).toBe(10);
     const l = endDay(withStock({ loan: 200 }), res(), 'x');
     expect(l.summary.loanRepaid).toBe(0);
     expect(l.state.loan).toBe(200);
@@ -298,7 +300,7 @@ describe('takeLoan', () => {
   });
   it('guards', () => {
     expect(takeLoan(withStock({ money: 100 }))).toBeNull();
-    expect(takeLoan(poor({ stock: { porkbelly: 10 } }))).toBeNull(); // value 60
+    expect(takeLoan(poor({ stock: { porkbelly: 20 } }))).toBeNull(); // value 80
     expect(takeLoan(poor({ stock: { fishball: 10 } }))).not.toBeNull(); // value 20
     expect(takeLoan(poor({ loan: 50 }))).toBeNull();
   });

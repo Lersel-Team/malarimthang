@@ -258,7 +258,8 @@ export class Shift {
     const lines = rollOrder(o.rng, arch, o.menu, size, this.pm);
     const spice = randint(o.rng, a.spice);
     const eatIn = o.rng() < (EAT_IN.rateByArchetype[arch] ?? 0);
-    const pMax = a.patienceSec * (o.patienceMult ?? 1) * (eatIn ? EAT_IN.patienceMult : 1);
+    const total = lines.reduce((n, l) => n + l.qty, 0);
+    const pMax = (a.patienceSec + total * SERVICE.patiencePerSkewerSec) * (o.patienceMult ?? 1) * (eatIn ? EAT_IN.patienceMult : 1);
     this.customers.push({
       ...nameFields(rollName(this.opts.nameRng ?? Math.random, arch)),
       id: this.nextId++, archetype: arch, order: { lines, spice, eatIn }, phase: 'walkIn',

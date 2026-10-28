@@ -1,12 +1,21 @@
 {
   "_comment": "Single source of truth for balance. Read by the game (src/data) and tools/balance_sim.py. Money in THB. Times in seconds at heat 1.0.",
   "shift": {
-    "lengthSec": 180,
+    "lengthSec": 300,
     "clockStart": "18:00",
     "clockEnd": "24:00",
     "startingMoney": 300,
     "packSize": 10,
-    "charcoalPerShift": 30
+    "charcoalPerShift": 45,
+    "coal": {
+      "start": 0.55,
+      "burnPerSec": 0.0035,
+      "addStep": 0.22,
+      "ashStep": 0.2,
+      "scoopCost": 3,
+      "heatMin": 0.55,
+      "heatMax": 1.45
+    }
   },
   "cooking": {
     "doneAt": 1.0,
@@ -65,16 +74,17 @@
     "comboStep": 5,
     "comboCap": 40,
     "autoCollectSec": 16,
-    "pickFirstSec": 1.2,
-    "pickSec": 1.1
+    "pickFirstSec": 1.0,
+    "pickSec": 0.6,
+    "patiencePerSkewerSec": 4
   },
   "items": [
     {
       "id": "fishball",
       "th": "ลูกชิ้นปลา",
       "cat": "processed",
-      "cost": 2,
-      "price": 12,
+      "cost": 1,
+      "price": 7,
       "sideTime": 5.5,
       "window": 0.45,
       "fatty": false,
@@ -90,8 +100,8 @@
       "id": "crabstick",
       "th": "ปูอัด",
       "cat": "processed",
-      "cost": 2,
-      "price": 12,
+      "cost": 1,
+      "price": 7,
       "sideTime": 5.0,
       "window": 0.35,
       "fatty": false,
@@ -107,8 +117,8 @@
       "id": "enoki",
       "th": "เห็ดเข็มทอง",
       "cat": "veg",
-      "cost": 2,
-      "price": 15,
+      "cost": 1,
+      "price": 9,
       "sideTime": 5.0,
       "window": 0.32,
       "fatty": false,
@@ -124,8 +134,8 @@
       "id": "porkbelly",
       "th": "หมูสามชั้น",
       "cat": "meat",
-      "cost": 6,
-      "price": 22,
+      "cost": 4,
+      "price": 13,
       "sideTime": 9.0,
       "window": 0.35,
       "fatty": true,
@@ -139,8 +149,8 @@
       "id": "sausage",
       "th": "ไส้กรอก",
       "cat": "processed",
-      "cost": 3,
-      "price": 15,
+      "cost": 2,
+      "price": 9,
       "sideTime": 6.5,
       "window": 0.4,
       "fatty": true,
@@ -156,8 +166,8 @@
       "id": "tofu",
       "th": "เต้าหู้ปลา",
       "cat": "processed",
-      "cost": 3,
-      "price": 15,
+      "cost": 2,
+      "price": 9,
       "sideTime": 7.0,
       "window": 0.5,
       "fatty": false,
@@ -173,8 +183,8 @@
       "id": "babycorn",
       "th": "ข้าวโพดอ่อน",
       "cat": "veg",
-      "cost": 2,
-      "price": 12,
+      "cost": 1,
+      "price": 7,
       "sideTime": 7.0,
       "window": 0.45,
       "fatty": false,
@@ -188,8 +198,8 @@
       "id": "chicken",
       "th": "ไก่",
       "cat": "meat",
-      "cost": 5,
-      "price": 18,
+      "cost": 3,
+      "price": 11,
       "sideTime": 10.5,
       "window": 0.3,
       "fatty": false,
@@ -206,8 +216,8 @@
       "id": "quailegg",
       "th": "ไข่นกกระทา",
       "cat": "processed",
-      "cost": 3,
-      "price": 18,
+      "cost": 2,
+      "price": 11,
       "sideTime": 6.5,
       "window": 0.35,
       "fatty": false,
@@ -223,8 +233,8 @@
       "id": "cheeseball",
       "th": "ลูกชิ้นชีส",
       "cat": "processed",
-      "cost": 4,
-      "price": 22,
+      "cost": 2,
+      "price": 13,
       "sideTime": 6.5,
       "window": 0.2,
       "fatty": false,
@@ -241,8 +251,8 @@
       "id": "kingoyster",
       "th": "เห็ดออรินจิ",
       "cat": "veg",
-      "cost": 3,
-      "price": 18,
+      "cost": 2,
+      "price": 11,
       "sideTime": 8.0,
       "window": 0.4,
       "fatty": false,
@@ -256,8 +266,8 @@
       "id": "squid",
       "th": "ปลาหมึก",
       "cat": "seafood",
-      "cost": 9,
-      "price": 38,
+      "cost": 5,
+      "price": 23,
       "sideTime": 6.5,
       "window": 0.25,
       "fatty": false,
@@ -273,8 +283,8 @@
       "id": "beef",
       "th": "เนื้อวัว",
       "cat": "meat",
-      "cost": 10,
-      "price": 38,
+      "cost": 6,
+      "price": 23,
       "sideTime": 8.0,
       "window": 0.22,
       "fatty": false,
@@ -288,8 +298,8 @@
       "id": "shrimp",
       "th": "กุ้ง",
       "cat": "seafood",
-      "cost": 12,
-      "price": 45,
+      "cost": 7,
+      "price": 27,
       "sideTime": 6.5,
       "window": 0.22,
       "fatty": false,
@@ -305,8 +315,8 @@
       "id": "lamb",
       "th": "เนื้อแกะ",
       "cat": "meat",
-      "cost": 14,
-      "price": 52,
+      "cost": 8,
+      "price": 31,
       "sideTime": 8.0,
       "window": 0.22,
       "fatty": true,
@@ -320,8 +330,8 @@
       "id": "scallop",
       "th": "หอยเชลล์",
       "cat": "seafood",
-      "cost": 16,
-      "price": 60,
+      "cost": 10,
+      "price": 36,
       "sideTime": 5.5,
       "window": 0.18,
       "fatty": false,
@@ -335,8 +345,8 @@
       "id": "wagyu",
       "th": "เนื้อวากิว",
       "cat": "meat",
-      "cost": 32,
-      "price": 118,
+      "cost": 19,
+      "price": 71,
       "sideTime": 5.5,
       "window": 0.15,
       "fatty": true,
@@ -350,8 +360,8 @@
       "id": "friedtofu",
       "th": "เต้าหู้ทอด",
       "cat": "veg",
-      "cost": 2,
-      "price": 15,
+      "cost": 1,
+      "price": 9,
       "sideTime": 5.0,
       "fryTime": 5.0,
       "window": 0.45,
@@ -366,8 +376,8 @@
       "id": "nugget",
       "th": "นักเก็ตไก่ทอด",
       "cat": "processed",
-      "cost": 4,
-      "price": 22,
+      "cost": 2,
+      "price": 13,
       "sideTime": 6.0,
       "fryTime": 6.0,
       "window": 0.4,
@@ -382,8 +392,8 @@
       "id": "sweetpotato",
       "th": "มันม่วงทอด",
       "cat": "veg",
-      "cost": 3,
-      "price": 18,
+      "cost": 2,
+      "price": 11,
       "sideTime": 7.0,
       "fryTime": 7.0,
       "window": 0.4,
@@ -398,8 +408,8 @@
       "id": "chickenwing",
       "th": "ปีกไก่ทอด",
       "cat": "meat",
-      "cost": 8,
-      "price": 30,
+      "cost": 5,
+      "price": 18,
       "sideTime": 10.0,
       "fryTime": 10.0,
       "window": 0.3,
@@ -415,8 +425,8 @@
       "id": "tempurashrimp",
       "th": "กุ้งชุบแป้งทอด",
       "cat": "seafood",
-      "cost": 14,
-      "price": 52,
+      "cost": 8,
+      "price": 31,
       "sideTime": 6.0,
       "fryTime": 6.0,
       "window": 0.22,
@@ -432,10 +442,10 @@
     "student": {
       "th": "นักเรียน",
       "size": [
-        1,
-        3
+        5,
+        9
       ],
-      "maxSpend": 50,
+      "maxSpend": 110,
       "patienceSec": 45,
       "tipRate": 0.0,
       "prefs": {
@@ -453,10 +463,10 @@
     "office": {
       "th": "พนักงานออฟฟิศ",
       "size": [
-        2,
-        4
+        8,
+        14
       ],
-      "maxSpend": 150,
+      "maxSpend": 260,
       "patienceSec": 35,
       "tipRate": 0.05,
       "prefs": {
@@ -474,10 +484,10 @@
     "family": {
       "th": "ครอบครัว",
       "size": [
-        3,
-        6
+        10,
+        20
       ],
-      "maxSpend": 200,
+      "maxSpend": 380,
       "patienceSec": 50,
       "tipRate": 0.03,
       "prefs": {
@@ -495,10 +505,10 @@
     "tourist": {
       "th": "นักท่องเที่ยว",
       "size": [
-        2,
-        5
+        7,
+        16
       ],
-      "maxSpend": 300,
+      "maxSpend": 520,
       "patienceSec": 42,
       "tipRate": 0.12,
       "prefs": {
@@ -516,10 +526,10 @@
     "nightowl": {
       "th": "สายดริ๊งค์",
       "size": [
-        3,
-        6
+        8,
+        18
       ],
-      "maxSpend": 250,
+      "maxSpend": 420,
       "patienceSec": 28,
       "tipRate": 0.08,
       "prefs": {
@@ -540,7 +550,7 @@
       "id": "soi",
       "th": "ปากซอยหน้าบ้าน",
       "rent": 40,
-      "customersPerMin": 4,
+      "customersPerMin": 2,
       "mix": {
         "student": 0.4,
         "office": 0.4,
@@ -553,7 +563,7 @@
       "id": "school",
       "th": "หน้าโรงเรียน",
       "rent": 80,
-      "customersPerMin": 7,
+      "customersPerMin": 3.5,
       "mix": {
         "student": 0.75,
         "family": 0.25
@@ -565,7 +575,7 @@
       "id": "nightmarket",
       "th": "ตลาดนัดกลางคืน",
       "rent": 180,
-      "customersPerMin": 8,
+      "customersPerMin": 4,
       "mix": {
         "office": 0.35,
         "family": 0.3,
@@ -579,7 +589,7 @@
       "id": "khaosan",
       "th": "ถนนข้าวสาร",
       "rent": 400,
-      "customersPerMin": 9,
+      "customersPerMin": 4.5,
       "mix": {
         "tourist": 0.55,
         "nightowl": 0.45
@@ -591,7 +601,7 @@
       "id": "yaowarat",
       "th": "เยาวราช",
       "rent": 600,
-      "customersPerMin": 10,
+      "customersPerMin": 5,
       "mix": {
         "tourist": 0.4,
         "office": 0.2,
@@ -608,14 +618,14 @@
       "th": "ขยายเตา (ราวย่าง)",
       "effect": "grillSlots",
       "values": [
-        4,
-        6,
         8,
         10,
         12,
-        16,
-        20,
-        24
+        14,
+        26,
+        30,
+        34,
+        57
       ],
       "costs": [
         250,
@@ -924,8 +934,8 @@
     }
   ],
   "progression": {
-    "xpPerSkewer": 2,
-    "xpPerPerfect": 2,
+    "xpPerSkewer": 1,
+    "xpPerPerfect": 1,
     "levelXp": "round(30 * L^1.6)",
     "maxLevel": 20
   },
@@ -1110,5 +1120,47 @@
       "perfect"
     ],
     "loadWholeCup": true
-  }
+  },
+  "grillTiers": [
+    {
+      "cols": 8,
+      "rows": 1,
+      "scale": 0.8
+    },
+    {
+      "cols": 10,
+      "rows": 1,
+      "scale": 0.8
+    },
+    {
+      "cols": 12,
+      "rows": 1,
+      "scale": 0.8
+    },
+    {
+      "cols": 14,
+      "rows": 1,
+      "scale": 0.68
+    },
+    {
+      "cols": 13,
+      "rows": 2,
+      "scale": 0.72
+    },
+    {
+      "cols": 15,
+      "rows": 2,
+      "scale": 0.64
+    },
+    {
+      "cols": 17,
+      "rows": 2,
+      "scale": 0.56
+    },
+    {
+      "cols": 19,
+      "rows": 3,
+      "scale": 0.49
+    }
+  ]
 }

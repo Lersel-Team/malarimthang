@@ -3,6 +3,10 @@
 ## Self-service plates (2026-10-28)
 - The grill is one open surface (no numbered slots). Customers at the counter pick their own skewers from the cooler onto a plate (`service.pickFirstSec`/`pickSec`, stock drops as they pick; sold-out items shrink the order).
 - Player drags raw skewers from the ticket's plate onto the grill (tap = first free spot), grills them, drags cooked ones into the bag on the ticket, then taps to pack and send. A binned skewer is re-picked by the customer.
+- Free-placement grill: drop a skewer anywhere there is room (drag to move it too); space is limited and the `grillSize` upgrade grows the grill (8, 10, 12, 14, 26, 30, 34, 57 skewers via `grillTiers`, smaller skewers on the big tiers). Fan covers an area under the finger.
+- Heat control: coal level burns down over the shift; ถ่าน adds coal (฿3 per scoop, charged at day end), เถ้า ash cools it. Heat bar above the grill.
+- Oil/sauce: drag a brush out of the pot and paint across skewers; eligible skewers get a pulsing ring (green = sauce ready, orange = too early).
+- Rebalance: orders are 5-20 skewers (student 5-9 … family 10-20), prices and costs x0.6, patience grows with order size (`patiencePerSkewerSec`), fewer customers/min, XP per skewer halved, shift 300 s (was 180 s), base charcoal 45.
 - Seated (eat-in) customers wait `eatIn.patienceMult` (1.6x) longer.
 
 ## Sprint 4: Look, the graphics pass (2026-10-24)

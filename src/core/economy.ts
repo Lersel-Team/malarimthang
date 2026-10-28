@@ -149,6 +149,8 @@ export interface ShiftResult {
   walkouts: number;
   avgStars: number | null;
   sold: Record<string, number>; // skewers sold per item
+  /** Extra charcoal scoops added during the shift (each costs SHIFT.coal.scoopCost). */
+  extraCharcoal?: number;
   wasted: Record<string, number>; // burnt/binned skewers per item
   xpEarned: number;
 }
@@ -190,7 +192,7 @@ export function endDay(state: GameState, result: ShiftResult, today: string): { 
     if (id in stock) stock[id] = Math.max(0, stock[id] - used);
   }
   const rent = LOCATIONS.find((l) => l.id === state.location)?.rent ?? 0;
-  const charcoal = SHIFT.charcoalPerShift * ((state.upgrades.grillType ?? 0) >= 2 ? 0.6 : 1);
+  const charcoal = SHIFT.charcoalPerShift * ((state.upgrades.grillType ?? 0) >= 2 ? 0.6 : 1) + (result.extraCharcoal ?? 0) * SHIFT.coal.scoopCost;
   const wages = (upg('helper') as { wagePerShift?: number[] }).wagePerShift?.[state.upgrades.helper ?? 0] ?? 0;
 
   // overnight: fridge first (priciest first), then the category rules

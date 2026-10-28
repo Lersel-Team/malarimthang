@@ -107,7 +107,7 @@ describe('spawning', () => {
     expect(lo).toBeLessThan(mid);
     expect(mid).toBeLessThan(hi);
     expect(mid / 5).toBeGreaterThan(expected * 0.75);
-    expect(mid / 5).toBeLessThan(expected * 1.35);
+    expect(mid / 5).toBeLessThan(expected * 1.35 + 1); // +1: the first arrival at t=1 always lands inside the 60 s window
   });
   it('spawnMult speeds arrivals', () => {
     const count = (spawnMult: number) => {
@@ -144,7 +144,9 @@ describe('spawning', () => {
   it('order spice within archetype range and patience uses patienceMult', () => {
     const s = mk({ patienceMult: 1.5 });
     const c = spawnOne(s);
-    expect(c.patienceMax).toBeCloseTo(ARCHETYPES[c.archetype as 'student'].patienceSec * 1.5);
+    const total = c.order.lines.reduce((n, l) => n + l.qty, 0);
+    const base = ARCHETYPES[c.archetype as 'student'].patienceSec + total * SERVICE.patiencePerSkewerSec;
+    expect(c.patienceMax).toBeCloseTo(base * 1.5 * (c.order.eatIn ? EAT_IN.patienceMult : 1));
     expect(c.order.spice).toBeGreaterThanOrEqual(0);
     expect(c.order.spice).toBeLessThanOrEqual(4);
   });
@@ -292,7 +294,7 @@ describe('serve math', () => {
     expect(c.mood).toBe('angry');
   });
   it('combo grows within window, resets outside, caps', () => {
-    const s = mk({ rating: 5, patienceMult: 100, location: LOCATIONS[2] });
+    const s = mk({ rating: 5, patienceMult: 100, spawnMult: 8, location: LOCATIONS[2] });
     const results: number[] = [];
     const serveOne = () => {
       let c: Customer | null = null;
@@ -434,13 +436,14 @@ describe('eat-in', () => {
 describe('clock and end', () => {
   it('clock strings', () => {
     const s = mk();
+    const L = SHIFT.lengthSec;
     expect(s.clock()).toBe('18:00');
-    s.time = 15; expect(s.clock()).toBe('18:30');
-    s.time = 29.9; expect(s.clock()).toBe('18:50');
-    s.time = 90; expect(s.clock()).toBe('21:00');
-    s.time = 179.9; expect(s.clock()).toBe('23:50');
-    s.time = 180; expect(s.clock()).toBe('24:00');
-    s.time = 500; expect(s.clock()).toBe('24:00');
+    s.time = L / 12; expect(s.clock()).toBe('18:30');
+    s.time = L / 6 - 0.1; expect(s.clock()).toBe('18:50');
+    s.time = L / 2; expect(s.clock()).toBe('21:00');
+    s.time = L - 0.1; expect(s.clock()).toBe('23:50');
+    s.time = L; expect(s.clock()).toBe('24:00');
+    s.time = L * 3; expect(s.clock()).toBe('24:00');
   });
   it('end fires once, only after everyone is done', () => {
     const s = mk({ rating: 1 }, 4);

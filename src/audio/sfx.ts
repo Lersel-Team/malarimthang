@@ -6,7 +6,7 @@
 type Ctx = AudioContext;
 
 const MASTER = 0.6;
-const MAX_SLOTS = 32;
+const MAX_SLOTS = 64;
 
 export class Sfx {
   private ctx: Ctx | null = null;
