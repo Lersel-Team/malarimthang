@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { settings } from '../settings';
 import { RES, pt, setupCamera } from '../engine/hidpi';
 import { GAME_H, GAME_W } from '../config';
-import { BALANCE, COOKING, ITEM_BY_ID, LOCATIONS, PROGRESSION, SHIFT, UPGRADES } from '../data/balance';
+import { BALANCE, COOKING, ITEM_BY_ID, LOCATIONS, PROGRESSION, SERVICE, SHIFT, UPGRADES } from '../data/balance';
 import type { ShiftResult } from '../core/economy';
 import { session } from '../session';
 import { renameShop } from './nameInput';
@@ -823,6 +823,17 @@ export class ShiftScene extends Phaser.Scene {
           .setOrigin(0.5)
           .setDepth(150);
         this.tweens.add({ targets: t, y: 36, alpha: 0, delay: 500, duration: 700, onComplete: () => t.destroy() });
+      } else if (e.type === 'returned') {
+        // raw skewers from a walked-out customer's plate go back in the fridge, but some spoil from the handling
+        let bad = 0;
+        for (let k = 0; k < e.qty; k++) {
+          if (Math.random() < SERVICE.returnSpoilChance) {
+            bad++;
+            this.wasted[e.itemId] = (this.wasted[e.itemId] ?? 0) + 1;
+          } else this.stock[e.itemId] = (this.stock[e.itemId] ?? 0) + 1;
+        }
+        this.refreshCooler();
+        this.say(bad > 0 ? `คืนตู้เย็น ${e.qty - bad} · เสีย ${bad}` : `คืนตู้เย็น ${e.qty} ไม้`, 1400);
       } else if (e.type === 'end') {
         this.endShift();
       }

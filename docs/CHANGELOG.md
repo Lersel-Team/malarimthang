@@ -1,5 +1,8 @@
 # Changelog
 
+## Walk-out returns (2026-10-28)
+- When a customer's patience runs out, the raw skewers still on their plate go back to the fridge, but each has a `service.returnSpoilChance` (30%) of spoiling from the handling (counted as wasted). Skewers already on the grill are unaffected.
+
 ## Spare grilling and bulk buying (2026-10-28)
 - Drag any item from the display bar onto the grill to grill a spare (replace a burnt skewer or a mix-up); tap still refills from the fridge. Spares can be packed into any ticket that needs that item.
 - Market: up to 12 packs per item per day (was 3), "+5" quick-buy button, volume discount (5% from the 5th pack, 10% from the 9th). Fridge slots and cash are the real limit.

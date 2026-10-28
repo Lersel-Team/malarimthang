@@ -106,6 +106,7 @@ export type ShiftEvent =
   | { type: 'pick'; id: number; itemId: string } // customer put a raw skewer on their plate
   | { type: 'toCounter'; id: number; ticketSlot: number }
   | { type: 'walkout'; id: number }
+  | { type: 'returned'; id: number; itemId: string; qty: number } // raw skewers left on the plate of a customer who walked out
   | { type: 'served'; id: number; pay: number; tip: number; combo: number; stars: number; eatIn: boolean }
   | { type: 'toSeat'; id: number; seat: number }
   | { type: 'sit'; id: number; seat: number } // eat-in customer took a table while their order is being grilled
@@ -414,6 +415,10 @@ export class Shift {
       if (c.phase === 'ordered') this.pickItems(c, dt, ev);
       if ((c.phase as Phase) !== 'leaving' && c.patience <= 0) {
         if (c.bill > 0) this.money += c.billBase; // seated customer with a pending bill still pays
+        for (const [itemId, picked] of Object.entries(c.ticket?.picked ?? {})) {
+          const used = Math.max(c.ticket!.grilled[itemId] ?? 0, c.ticket!.skewers.filter((k) => k.itemId === itemId).length);
+          if (picked - used > 0) ev.push({ type: 'returned', id: c.id, itemId, qty: picked - used });
+        }
         this.startLeaving(c);
         c.mood = 'angry';
         this.ledger.walkouts++;

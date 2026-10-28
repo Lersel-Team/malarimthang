@@ -536,6 +536,16 @@ describe('self-service plate', () => {
     expect(c.ticket!.picked).toEqual({ fishball: 1, enoki: 2 });
     expect(s.isComplete(c.ticketSlot!) || c.phase !== 'ordered').toBe(false);
   });
+  it('a walk-out returns the raw skewers still on their plate (not the ones already grilled)', () => {
+    const { s, c } = atCounter(false, { patienceMult: 1 });
+    c.order.lines = [{ itemId: 'enoki', qty: 3 }];
+    for (let i = 0; i < 20; i++) s.tick(0.25);
+    expect(s.takeFromPlate(c.ticketSlot!, 'enoki')).toBe(true);
+    c.patience = 0.1;
+    const ev: ShiftEvent[] = [];
+    for (let i = 0; i < 4; i++) ev.push(...s.tick(0.25));
+    expect(ev).toContainEqual({ type: 'returned', id: c.id, itemId: 'enoki', qty: 2 });
+  });
   it('eat-in customers wait longer than takeaway ones', () => {
     const arch = ARCHETYPES;
     let eat = 0, take = 0;

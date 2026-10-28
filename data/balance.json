@@ -76,7 +76,8 @@
     "autoCollectSec": 16,
     "pickFirstSec": 1.0,
     "pickSec": 0.6,
-    "patiencePerSkewerSec": 4
+    "patiencePerSkewerSec": 4,
+    "returnSpoilChance": 0.3
   },
   "items": [
     {
