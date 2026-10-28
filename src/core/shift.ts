@@ -133,8 +133,6 @@ export interface ShiftOptions {
   waiterSec?: number;
   /** Cooler stock per item; customers take from it as they pick (mutated in place). Omit for unlimited. */
   stock?: Record<string, number>;
-  /** Fridge stock behind the bar: a customer waits (patience running) for a refill instead of settling for less. */
-  reserve?: Record<string, number>;
   /** Separate stream for cosmetic rolls (names) so they don't shift gameplay randomness. Default Math.random. */
   nameRng?: Rng;
 }
@@ -352,8 +350,7 @@ export class Shift {
       if (!line) { this.trySit(c, ev); return; }
       const left = this.opts.stock ? (this.opts.stock[line.itemId] ?? 0) : Infinity;
       if (left <= 0) {
-        if ((this.opts.reserve?.[line.itemId] ?? 0) > 0) return; // the bar is empty but the fridge isn't: wait for a refill
-        // sold out: the customer settles for what they already have
+        // the bar is out of this item: the customer stops picking it and settles for what they already have
         line.qty = t.picked[line.itemId] ?? 0;
         c.order.lines = c.order.lines.filter((l) => l.qty > 0);
         if (c.order.lines.length === 0) { c.mood = 'sad'; this.startLeaving(c); return; }

@@ -527,6 +527,15 @@ describe('self-service plate', () => {
     for (let i = 0; i < 8; i++) s.tick(0.25);
     expect(s.customers.find((x) => x.id === c.id)?.phase ?? 'gone').toMatch(/leaving|gone/);
   });
+  it('a customer stops picking an item the bar ran out of and buys what they got', () => {
+    const stock = { fishball: 1, crabstick: 50, enoki: 50, porkbelly: 50 };
+    const { s, c } = atCounter(false, { stock });
+    c.order.lines = [{ itemId: 'fishball', qty: 4 }, { itemId: 'enoki', qty: 2 }];
+    for (let i = 0; i < 60; i++) s.tick(0.25);
+    expect(c.order.lines).toEqual([{ itemId: 'fishball', qty: 1 }, { itemId: 'enoki', qty: 2 }]);
+    expect(c.ticket!.picked).toEqual({ fishball: 1, enoki: 2 });
+    expect(s.isComplete(c.ticketSlot!) || c.phase !== 'ordered').toBe(false);
+  });
   it('eat-in customers wait longer than takeaway ones', () => {
     const arch = ARCHETYPES;
     let eat = 0, take = 0;

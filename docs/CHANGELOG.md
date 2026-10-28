@@ -8,7 +8,7 @@
 - Tables seat 4 (2 tables = 8 seats to start, up to 6). Eat-in customers take a table as soon as their order is on the plate and wait there (longer patience); the grilled order goes on a plate, a waiter carries it to the table, then they eat. Takeaway orders go in a bag. Waiter upgrade: count and trip time (`waiter`).
 - Tickets redrawn: raw tray, bag (takeaway) or plate (eat-in) that fills as you drop skewers in, shaker row.
 - Grill starts at 12 skewers (12, 14, 16, 22, 26, 32, 48, 57).
-- Start money 800. Fridge slots (`fridgeSize`, start 150 skewers = about a day) cap total stock. The display bar holds `tray` skewers per item for `displayBox` item types; customers pick from it and wait if it runs dry. Tap an item on the bar to refill it from the fridge.
+- Start money 800. Fridge slots (`fridgeSize`, start 150 skewers = about a day) cap total stock. The display bar holds `tray` skewers per item for `displayBox` item types; customers pick from it; when an item runs out they stop picking it and buy only what they already took, so refill in time. Tap an item on the bar to refill it from the fridge.
 
 ## Self-service plates (2026-10-28)
 - The grill is one open surface (no numbered slots). Customers at the counter pick their own skewers from the cooler onto a plate (`service.pickFirstSec`/`pickSec`, stock drops as they pick; sold-out items shrink the order).

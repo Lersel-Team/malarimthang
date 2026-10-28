@@ -294,7 +294,6 @@ export class ShiftScene extends Phaser.Scene {
       spawnMult: upgradeValue('sign', st.upgrades.sign ?? 0) || 1,
       rng: Math.random,
       stock: this.display,
-      reserve: this.stock,
     });
     this.stats = { perfect: 0, ok: 0, burnt: 0, bin: 0 };
     this.waterMode = false;
