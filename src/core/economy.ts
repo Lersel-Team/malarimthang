@@ -33,19 +33,18 @@ export interface GameState {
 }
 
 export const MAX_PACKS = 3;
-export const STORAGE_CAP = 30;
-export const STORAGE_CAP_FRIDGE = 50;
 /** Share of over-capacity veg/processed stock that survives the night (simplification of the 2/3-night rule). */
 export const KEEP_SHARE = 0.4;
 
 const upg = (id: string) => UPGRADES.find((u) => u.id === id)!;
 const basis = (st: GameState, id: string) => st.costBasis?.[id] ?? ITEM_BY_ID[id].cost;
-const storageCap = (st: GameState) => ((st.upgrades.fridge ?? 0) >= 1 ? STORAGE_CAP_FRIDGE : STORAGE_CAP);
+/** Fridge slots: total skewers that can be stocked (start 150 = about a day of selling). */
+const storageCap = (st: GameState) => (upg('fridgeSize').values as number[])[st.upgrades.fridgeSize ?? 0] ?? 0;
+const stockTotal = (st: GameState) => Object.values(st.stock).reduce((a, b) => a + b, 0);
 
 export function newGame(): GameState {
   const upgrades: Record<string, number> = {};
   for (const u of UPGRADES) upgrades[u.id] = 0;
-  upgrades.tables = 1; // 2 stools to start
   return {
     version: SAVE_VERSION,
     shopName: 'หม่าล่าริมทาง',
@@ -109,7 +108,7 @@ export function buyPacks(state: GameState, market: Market, itemId: string, packs
   if (done + packs > market.maxPacks) return null;
   const skewers = packs * market.packSize;
   const have = state.stock[itemId] ?? 0;
-  if (have + skewers > storageCap(state)) return null;
+  if (stockTotal(state) + skewers > storageCap(state)) return null;
   const cost = offer.unitCost * skewers;
   if (cost > state.money) return null;
   const avg = (have * basis(state, itemId) + skewers * offer.unitCost) / (have + skewers);
@@ -126,16 +125,18 @@ export function buyPacks(state: GameState, market: Market, itemId: string, packs
 export function suggestRefill(state: GameState, market: Market, soldYesterday: Record<string, number>): Record<string, number> {
   const out: Record<string, number> = {};
   let money = state.money;
+  let free = storageCap(state) - stockTotal(state);
   const order = Object.keys(soldYesterday).filter((id) => soldYesterday[id] > 0).sort((a, b) => soldYesterday[b] - soldYesterday[a]);
   for (const id of order) {
     const offer = market.offers.find((o) => o.itemId === id);
     if (!offer) continue;
     let packs = Math.ceil((soldYesterday[id] * MARKET.refillYesterdayMult) / market.packSize);
     packs = Math.min(packs, market.maxPacks - (state.bought?.[id] ?? 0));
-    packs = Math.min(packs, Math.floor((storageCap(state) - (state.stock[id] ?? 0)) / market.packSize));
+    packs = Math.min(packs, Math.floor(free / market.packSize));
     packs = Math.min(packs, Math.floor(money / (offer.unitCost * market.packSize)));
     if (packs <= 0) continue;
     out[id] = packs;
+    free -= packs * market.packSize;
     money -= packs * offer.unitCost * market.packSize;
   }
   return out;

@@ -20,6 +20,7 @@ export type Phase =
   | 'queue' // standing in line, no ticket yet (patience runs)
   | 'ordered' // has a ticket at the counter (patience runs)
   | 'toSeat' // eat-in, walking to the seat
+  | 'delivering' // seated, waiting for a waiter to bring the plate
   | 'eating' // seated, eating
   | 'bill' // eat-in finished, money waiting on the table
   | 'leaving' // walking out
@@ -84,6 +85,10 @@ export interface Customer {
   isExtra: boolean;
   /** Order in which they joined the queue (FIFO). */
   queueSeq: number;
+  /** Order in which the plate was handed to the waiters (FIFO); null until then. */
+  deliverSeq: number | null;
+  /** Eating time to start once the plate arrives (extra orders eat briefly). */
+  deliverEatSec: number | null;
 }
 
 export interface Ledger {
@@ -103,6 +108,8 @@ export type ShiftEvent =
   | { type: 'walkout'; id: number }
   | { type: 'served'; id: number; pay: number; tip: number; combo: number; stars: number; eatIn: boolean }
   | { type: 'toSeat'; id: number; seat: number }
+  | { type: 'sit'; id: number; seat: number } // eat-in customer took a table while their order is being grilled
+  | { type: 'delivered'; id: number }
   | { type: 'noSeat'; id: number } // eat-in customer took it away instead
   | { type: 'extraOrder'; id: number } // seated customer ordered more: back to 'ordered' with a new small order
   | { type: 'bill'; id: number; seat: number; amount: number }
@@ -120,8 +127,14 @@ export interface ShiftOptions {
   patienceMult?: number; // seat grade
   spawnMult?: number; // sign
   rng: Rng;
+  /** Waiters who carry plates to tables (0 = legacy: customer eats right after being served). */
+  waiters?: number;
+  /** Seconds a waiter needs for one delivery. */
+  waiterSec?: number;
   /** Cooler stock per item; customers take from it as they pick (mutated in place). Omit for unlimited. */
   stock?: Record<string, number>;
+  /** Fridge stock behind the bar: a customer waits (patience running) for a refill instead of settling for less. */
+  reserve?: Record<string, number>;
   /** Separate stream for cosmetic rolls (names) so they don't shift gameplay randomness. Default Math.random. */
   nameRng?: Rng;
 }
@@ -195,9 +208,12 @@ export class Shift {
   private nextSpawn = 1;
   private lastServe = -Infinity;
   private pm: number;
+  /** One entry per waiter: the customer being served, seconds left and trip length. */
+  waiters: { id: number | null; t: number; total: number }[];
 
   constructor(readonly opts: ShiftOptions) {
     this.pm = opts.priceMult ?? 1;
+    this.waiters = Array.from({ length: opts.waiters ?? 0 }, () => ({ id: null, t: 0, total: opts.waiterSec ?? 3 }));
   }
 
   /** In-game clock "18:00".."24:00". */
@@ -232,6 +248,7 @@ export class Shift {
       this.nextSpawn = at + (1 / rate) * (0.7 + 0.6 * o.rng());
     }
     for (const c of [...this.customers]) this.stepCustomer(c, dt, ev);
+    this.stepWaiters(dt, ev);
     this.customers = this.customers.filter((c) => c.phase !== 'gone');
     this.fillTickets(ev);
     if (
@@ -264,9 +281,53 @@ export class Shift {
       ...nameFields(rollName(this.opts.nameRng ?? Math.random, arch)),
       id: this.nextId++, archetype: arch, order: { lines, spice, eatIn }, phase: 'walkIn',
       phaseT: WALK_IN_SEC, patience: pMax, patienceMax: pMax, ticketSlot: null, ticket: null,
-      seat: null, bill: 0, mood: null, billBase: 0, extraDone: false, isExtra: false, queueSeq: 0,
+      seat: null, bill: 0, mood: null, billBase: 0, extraDone: false, isExtra: false, queueSeq: 0, deliverSeq: null, deliverEatSec: null,
     });
     ev.push({ type: 'arrive', id: this.nextId - 1 });
+  }
+
+  /** Waiters pick up plates in the order they were handed over. The customer starts eating when the waiter
+   *  arrives (half the trip); the waiter then walks back before taking the next plate. */
+  private stepWaiters(dt: number, ev: ShiftEvent[]): void {
+    const trip = this.opts.waiterSec ?? 3;
+    for (const w of this.waiters) {
+      if (w.id !== null) {
+        w.t -= dt;
+        const c = this.customers.find((x) => x.id === w.id);
+        if (c && c.phase === 'delivering' && w.t <= w.total / 2) {
+          c.phase = 'eating';
+          c.phaseT = c.deliverEatSec ?? this.eatSec();
+          c.deliverSeq = null;
+          c.deliverEatSec = null;
+          ev.push({ type: 'delivered', id: c.id });
+        }
+        if (w.t > 0) continue;
+        w.id = null;
+      }
+      const next = this.customers
+        .filter((x) => x.phase === 'delivering' && x.deliverSeq !== null && !this.waiters.some((o) => o.id === x.id))
+        .sort((p, q) => (p.deliverSeq as number) - (q.deliverSeq as number))[0];
+      if (next) { w.id = next.id; w.t = w.total = trip; }
+    }
+  }
+
+  private handOverPlate(c: Customer, eatSec: number | null): void {
+    c.phase = 'delivering';
+    c.phaseT = 1e9;
+    c.deliverSeq = this.seq++;
+    c.deliverEatSec = eatSec;
+  }
+
+  /** Eat-in customers whose whole order is on the plate take a free table while it is grilled. */
+  private trySit(c: Customer, ev: ShiftEvent[]): void {
+    if (!this.waiters.length || !c.order.eatIn || c.isExtra || c.seat !== null) return;
+    const used = new Set(this.customers.map((x) => x.seat));
+    for (let i = 0; i < this.opts.seats; i++) {
+      if (used.has(i)) continue;
+      c.seat = i;
+      ev.push({ type: 'sit', id: c.id, seat: i });
+      return;
+    }
   }
 
   private freeSlot(): number | null {
@@ -285,11 +346,13 @@ export class Shift {
     const t = c.ticket;
     if (!t) return;
     t.pickT -= dt;
+    if (t.pickT > 0 && c.seat === null && c.order.lines.every((l) => (t.picked[l.itemId] ?? 0) >= l.qty)) this.trySit(c, ev);
     while (t.pickT <= 0) {
       const line = c.order.lines.find((l) => (t.picked[l.itemId] ?? 0) < l.qty);
-      if (!line) return;
+      if (!line) { this.trySit(c, ev); return; }
       const left = this.opts.stock ? (this.opts.stock[line.itemId] ?? 0) : Infinity;
       if (left <= 0) {
+        if ((this.opts.reserve?.[line.itemId] ?? 0) > 0) return; // the bar is empty but the fridge isn't: wait for a refill
         // sold out: the customer settles for what they already have
         line.qty = t.picked[line.itemId] ?? 0;
         c.order.lines = c.order.lines.filter((l) => l.qty > 0);
@@ -376,8 +439,11 @@ export class Shift {
         break;
       }
       case 'toSeat':
-        c.phase = 'eating';
-        c.phaseT = this.eatSec();
+        if (this.waiters.length) this.handOverPlate(c, null);
+        else {
+          c.phase = 'eating';
+          c.phaseT = this.eatSec();
+        }
         break;
       case 'eating': {
         const slot = this.freeSlot();
@@ -468,7 +534,9 @@ export class Shift {
     let tip = base * (ARCHETYPES[c.archetype].tipRate + (eat ? EAT_IN.tipBonus : 0)) *
       SERVICE.tipByBand[band] * q * (wrong ? 1 - SPICE.wrongSpicePenalty : 1);
     let seat = -1;
-    if (eat && !c.isExtra) {
+    const seatedAlready = !c.isExtra && c.seat !== null;
+    if (seatedAlready) seat = c.seat as number;
+    else if (eat && !c.isExtra) {
       const used = new Set(this.customers.map((x) => x.seat));
       for (let i = 0; i < this.opts.seats; i++) if (!used.has(i)) { seat = i; break; }
       if (seat < 0) {
@@ -493,16 +561,24 @@ export class Shift {
       c.bill += total;
       c.billBase += base;
       c.isExtra = false;
-      c.phase = 'eating';
-      c.phaseT = EXTRA_BACK_TO_EAT_SEC;
+      if (this.waiters.length) this.handOverPlate(c, EXTRA_BACK_TO_EAT_SEC);
+      else {
+        c.phase = 'eating';
+        c.phaseT = EXTRA_BACK_TO_EAT_SEC;
+      }
       ev.push(sv);
     } else if (eat && seat >= 0) {
       c.bill = total;
       c.billBase = base;
       c.seat = seat;
-      c.phase = 'toSeat';
-      c.phaseT = WALK_SEAT_SEC;
-      ev.push(sv, { type: 'toSeat', id: c.id, seat });
+      if (seatedAlready) {
+        this.handOverPlate(c, null);
+        ev.push(sv);
+      } else {
+        c.phase = 'toSeat';
+        c.phaseT = WALK_SEAT_SEC;
+        ev.push(sv, { type: 'toSeat', id: c.id, seat });
+      }
     } else {
       this.money += total;
       c.bill = total;

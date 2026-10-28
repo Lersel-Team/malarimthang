@@ -49,7 +49,7 @@ const WATER = { x: 318, y: 556, w: 34, h: 54 };
 const HUD_H = 28;
 const CARD_Y = SHOP_H + 4, CARD_W = 112, CARD_H = 122, CARD_GAP = 4, CARD_X0 = 8;
 const cardX = (i: number) => CARD_X0 + i * (CARD_W + CARD_GAP);
-const SHAKER = { dx: 4, dy: 78, w: 46, h: 26 };
+const SHAKER = { dx: 4, dy: 83, w: 44, h: 22 };
 
 /** Level index into an upgrade's values table (clamped). */
 function upgradeValue(id: string, level: number): number {
@@ -146,12 +146,16 @@ export class ShiftScene extends Phaser.Scene {
   private gaugeG!: Phaser.GameObjects.Graphics;
   private gaugeSig = '';
   private menu: string[] = [];
+  /** Skewers left in the fridge (refill the bar from here). */
   private stock: Record<string, number> = {};
+  /** Skewers on the display bar: what customers pick from. */
+  private display: Record<string, number> = {};
+  private trayCap = 12;
   private sold: Record<string, number> = {};
   private wasted: Record<string, number> = {};
   private perfects = 0;
   private paused = false;
-  private coolerCells: { id: string; x: number; y: number; w: number; h: number; icon: Phaser.GameObjects.Container | Phaser.GameObjects.Image; count: Phaser.GameObjects.Text }[] = [];
+  private coolerCells: { id: string; x: number; y: number; w: number; h: number; icon: Phaser.GameObjects.Container | Phaser.GameObjects.Image; count: Phaser.GameObjects.Text; fridge: Phaser.GameObjects.Text }[] = [];
 
   constructor() {
     super('Shift');
@@ -242,12 +246,28 @@ export class ShiftScene extends Phaser.Scene {
     this.coalAdded = 0;
     this.gaugeSig = '';
     this.stock = { ...st.stock };
-    this.menu = st.unlockedItems.filter((id) => ITEM_BY_ID[id] && (this.stock[id] ?? 0) > 0);
+    const boxSlots = upgradeValue('displayBox', st.upgrades.displayBox ?? 0);
+    this.trayCap = upgradeValue('tray', st.upgrades.tray ?? 0);
+    this.menu = st.unlockedItems
+      .filter((id) => ITEM_BY_ID[id] && (this.stock[id] ?? 0) > 0)
+      .sort((a, b) => (this.stock[b] ?? 0) - (this.stock[a] ?? 0))
+      .slice(0, boxSlots);
+    // the bar starts full from the fridge; customers pick from it
+    this.display = {};
+    for (const id of this.menu) {
+      const take = Math.min(this.trayCap, this.stock[id] ?? 0);
+      this.display[id] = take;
+      this.stock[id] -= take;
+    }
     this.sold = {};
     this.wasted = {};
     this.perfects = 0;
     this.paused = false;
-    const seats = upgradeValue('tables', st.upgrades.tables ?? 0);
+    const seats = upgradeValue('tables', st.upgrades.tables ?? 0) * 4;
+    const wLevel = st.upgrades.waiter ?? 0;
+    const waiterU = UPGRADES.find((u) => u.id === 'waiter') as { values: number[]; tripSec: number[] };
+    const waiters = waiterU.values[Math.min(wLevel, waiterU.values.length - 1)];
+    const waiterSec = waiterU.tripSec[Math.min(wLevel, waiterU.tripSec.length - 1)];
 
     this.sfx = (this.registry.get('sfx') as Sfx | undefined) ?? new Sfx();
     this.registry.set('sfx', this.sfx);
@@ -266,12 +286,15 @@ export class ShiftScene extends Phaser.Scene {
       location: LOCATIONS.find((l) => l.id === st.location) ?? LOCATIONS[0],
       menu: this.menu,
       seats,
+      waiters,
+      waiterSec,
       rating: st.rating,
       priceMult: upgradeValue('powder', st.upgrades.powder ?? 0) || 1,
       patienceMult: upgradeValue('seating', st.upgrades.seating ?? 0) || 1,
       spawnMult: upgradeValue('sign', st.upgrades.sign ?? 0) || 1,
       rng: Math.random,
-      stock: this.stock,
+      stock: this.display,
+      reserve: this.stock,
     });
     this.stats = { perfect: 0, ok: 0, burnt: 0, bin: 0 };
     this.waterMode = false;
@@ -367,7 +390,7 @@ export class ShiftScene extends Phaser.Scene {
   private drawCooler() {
     this.add.image(COOLER.x, COOLER.y, 'cooler-body').setOrigin(0, 0).setDisplaySize(COOLER.w, COOLER.h);
     this.add.image(COOLER.x + 5, COOLER.y + 22, 'cooler-glass').setOrigin(0, 0).setDisplaySize(COOLER.w - 10, COOLER.h - 27).setDepth(1);
-    this.add.text(COOLER.x + 10, COOLER.y + 3, 'ตู้แช่', { fontFamily: FONT, fontSize: '14px', color: '#10222a' });
+    this.add.text(COOLER.x + 10, COOLER.y + 3, 'ตู้โชว์ · แตะเพื่อเติม', { fontFamily: FONT, fontSize: '13px', color: '#10222a' });
     this.coolerCells = [];
     const ids = this.menu.slice(0, 18);
     ids.forEach((id, i) => {
@@ -388,18 +411,43 @@ export class ShiftScene extends Phaser.Scene {
         .text(r.x + r.w - 2, r.y + 1, '', { fontFamily: FONT, fontSize: '11px', color: '#fff', backgroundColor: '#c0302a', padding: { x: 3, y: 0 } })
         .setOrigin(1, 0)
         .setDepth(2);
-      this.coolerCells.push({ id, x: r.x, y: r.y, w: r.w, h: r.h, icon: ic, count });
+      const fridge = this.add
+        .text(r.x + r.w - 2, r.y + r.h - 1, '', { fontFamily: FONT, fontSize: '9px', color: '#bfe6ff' })
+        .setOrigin(1, 1)
+        .setDepth(2);
+      this.coolerCells.push({ id, x: r.x, y: r.y, w: r.w, h: r.h, icon: ic, count, fridge });
     });
     this.refreshCooler();
   }
 
   private refreshCooler() {
     for (const c of this.coolerCells) {
-      const left = this.stock[c.id] ?? 0;
-      c.count.setText(String(left));
-      c.icon.setAlpha(left > 0 ? 1 : 0.28);
-      c.count.setBackgroundColor(left > 0 ? '#c0302a' : '#4a4a52');
+      const bar = this.display[c.id] ?? 0;
+      const fr = this.stock[c.id] ?? 0;
+      c.count.setText(String(bar));
+      c.icon.setAlpha(bar > 0 ? 1 : 0.28);
+      const low = bar <= this.trayCap * 0.3;
+      c.count.setBackgroundColor(bar <= 0 ? '#4a4a52' : low ? '#e0701a' : '#c0302a');
+      c.fridge.setText(fr > 0 ? `+${fr}` : '');
     }
+  }
+
+  private coolerItemAt(x: number, y: number): string | undefined {
+    return this.coolerCells.find((c) => inRect(c, x, y))?.id;
+  }
+
+  /** Refills one item on the bar from the fridge, up to the tray size. */
+  private refillItem(id: string) {
+    if (this.over) return;
+    const room = this.trayCap - (this.display[id] ?? 0);
+    const take = Math.min(room, this.stock[id] ?? 0);
+    if (room <= 0) return this.say('ถาดเต็มแล้ว');
+    if (take <= 0) return this.say('ตู้เย็นหมดแล้ว!');
+    this.display[id] = (this.display[id] ?? 0) + take;
+    this.stock[id] -= take;
+    this.sfx.place();
+    this.refreshCooler();
+    this.say(`เติม${ITEM_BY_ID[id].th} +${take}`);
   }
 
   private drawBinAndBottle() {
@@ -619,39 +667,77 @@ export class ShiftScene extends Phaser.Scene {
         continue;
       }
       const done = this.shift.isComplete(i);
+      const eatIn = c.order.eatIn;
       const panel = uiPanel(this, x, y, CARD_W, CARD_H, 'ticket', { origin: 'topLeft', tape: false, notch: 0.15, accent: done ? 0x3f9a62 : 0xd6342b, seed: c.id }).setDepth(3);
       card.content.push(panel);
-      card.content.push(this.txt(x + 10, y + 9, c.name, 13, '#3a2a20'));
-      const tag = this.txt(x + CARD_W - 9, y + 63, c.order.eatIn ? 'นั่งกิน' : 'กลับบ้าน', 10, c.order.eatIn ? '#2f7a48' : '#2a5aa8').setOrigin(1, 0);
-      card.content.push(tag);
-      // the customer's plate: raw skewers waiting to be grilled
-      const plate = this.add.graphics().setDepth(4);
-      plate.fillStyle(0xf4efe6, 0.95);
-      plate.fillRoundedRect(x + 6, y + 22, CARD_W - 12, 40, 10);
-      plate.lineStyle(1.5, 0xc4b8a4, 1);
-      plate.strokeRoundedRect(x + 6, y + 22, CARD_W - 12, 40, 10);
-      card.content.push(plate);
-      const items = this.plateLayout(i);
-      items.forEach((it) => {
-        plate.lineStyle(1.5, 0x9a7a4a, 1);
-        plate.lineBetween(it.x - it.size * 0.62, it.y, it.x + it.size * 0.62, it.y);
+      card.content.push(this.txt(x + 10, y + 7, c.name, 12, '#3a2a20'));
+      // eat-in orders go on a plate to the table, takeaway orders in a bag
+      const chip = this.add.graphics().setDepth(4);
+      chip.fillStyle(eatIn ? 0x2f7a48 : 0x2a5aa8, 1);
+      chip.fillRoundedRect(x + CARD_W - 50, y + 7, 42, 14, 7);
+      card.content.push(chip);
+      card.content.push(this.txt(x + CARD_W - 29, y + 14, eatIn ? 'นั่งกิน' : 'กลับบ้าน', 9, '#fff').setOrigin(0.5));
+      // tray: raw skewers the customer picked, waiting for the grill
+      const tray = this.add.graphics().setDepth(4);
+      tray.fillStyle(0xe9dfcc, 0.9);
+      tray.fillRoundedRect(x + 6, y + 23, CARD_W - 12, 30, 7);
+      tray.lineStyle(1, 0xc4b8a4, 1);
+      tray.strokeRoundedRect(x + 6, y + 23, CARD_W - 12, 30, 7);
+      card.content.push(tray);
+      this.plateLayout(i).forEach((it) => {
+        tray.lineStyle(1.2, 0x9a7a4a, 1);
+        tray.lineBetween(it.x - it.size * 0.62, it.y, it.x + it.size * 0.62, it.y);
         card.content.push(itemIcon(this, it.itemId, it.size, 'raw').setPosition(it.x, it.y).setDepth(5));
       });
+      // serving container: bag or plate, fills as grilled skewers are dropped in
       const total = c.order.lines.reduce((n, l) => n + l.qty, 0);
-      const packed = c.ticket.skewers.length;
-      if (!done) card.content.push(this.txt(x + CARD_W - 10, y + 9, `ถุง ${packed}/${total}`, 12, '#6a5a48').setOrigin(1, 0));
+      const sk = c.ticket.skewers;
+      const frac = total > 0 ? Math.min(1, sk.length / total) : 0;
+      const cx = x + 46, cy = y + 66;
+      const box = this.add.graphics().setDepth(4);
+      if (eatIn) {
+        box.fillStyle(0x000000, 0.18);
+        box.fillEllipse(cx + 1, cy + 3, 80, 22);
+        box.fillStyle(0xf8f6f0, 1);
+        box.fillEllipse(cx, cy, 80, 22);
+        box.lineStyle(2, done ? 0x3f9a62 : 0xb8b0a0, 1);
+        box.strokeEllipse(cx, cy, 80, 22);
+        box.lineStyle(1, 0xd8d2c4, 1);
+        box.strokeEllipse(cx, cy, 62, 15);
+      } else {
+        box.lineStyle(2, 0x8a6a3a, 1);
+        box.beginPath();
+        box.arc(cx - 11, cy - 10, 7, Math.PI, 0);
+        box.arc(cx + 11, cy - 10, 7, Math.PI, 0);
+        box.strokePath();
+        box.fillStyle(0xc9a064, 1);
+        box.fillRoundedRect(cx - 28, cy - 10, 56, 24, 3);
+        box.fillStyle(0xe8c47c, 1);
+        box.fillRect(cx - 27, cy - 9, 54 * frac, 22);
+        box.lineStyle(done ? 3 : 1.5, done ? 0x3f9a62 : 0x8a6a3a, 1);
+        box.strokeRoundedRect(cx - 28, cy - 10, 56, 24, 3);
+        box.lineStyle(1, 0x8a6a3a, 0.6);
+        box.lineBetween(cx - 28, cy - 4, cx + 28, cy - 4);
+      }
+      card.content.push(box);
+      if (eatIn) {
+        sk.slice(0, 10).forEach((k, n) => {
+          const px = cx - 32 + (n % 5) * 16, py = cy - 4 + Math.floor(n / 5) * 8;
+          card.content.push(itemIcon(this, k.itemId, 10).setPosition(px, py).setDepth(5));
+        });
+      }
+      if (sk.length === 0) card.content.push(this.txt(cx, cy + (eatIn ? 0 : 3), eatIn ? 'วางจาน' : 'ใส่ถุง', 10, '#9a8a70').setOrigin(0.5));
+      else if (!eatIn) card.content.push(this.txt(cx, cy + 3, `${sk.length}/${total}`, 12, '#3a2a20').setOrigin(0.5));
+      card.content.push(this.txt(x + CARD_W - 8, cy - 4, done ? 'ส่ง ▶' : eatIn ? `${sk.length}/${total}` : '', 12, done ? '#b0580a' : '#6a5a48').setOrigin(1, 0));
       const sp = c.order.spice;
-      card.content.push(this.txt(x + 10, y + 63, sp === 0 ? 'ไม่เผ็ด' : '🌶'.repeat(sp), 12, '#b02a1a'));
       const by = y + SHAKER.dy;
       card.content.push(this.add.image(x + SHAKER.dx, by, 'tool-shaker').setOrigin(0, 0).setDisplaySize(SHAKER.w, SHAKER.h).setDepth(4));
-      card.content.push(this.txt(x + SHAKER.dx + SHAKER.w / 2, by + SHAKER.h / 2, 'ผง', 13, '#fff').setOrigin(0.5));
+      card.content.push(this.txt(x + SHAKER.dx + SHAKER.w / 2, by + SHAKER.h / 2, 'ผง', 12, '#fff').setOrigin(0.5));
       if (sp > 0 || c.ticket.shakes > 0) {
         const okShake = c.ticket.shakes === sp;
-        card.content.push(this.txt(x + SHAKER.dx + SHAKER.w + 4, by + 5, `${c.ticket.shakes}/${sp}`, 13, okShake ? '#2f7a48' : '#8a5a30'));
+        card.content.push(this.txt(x + SHAKER.dx + SHAKER.w + 5, by + 3, `${c.ticket.shakes}/${sp}`, 13, okShake ? '#2f7a48' : '#8a5a30'));
       }
-      if (done) {
-        card.content.push(this.txt(x + CARD_W - 10, y + 9, 'แพ็ก/ส่ง ▶', 13, '#b0580a').setOrigin(1, 0));
-      }
+      card.content.push(this.txt(x + CARD_W - 8, by + 4, sp === 0 ? 'ไม่เผ็ด' : `🌶×${sp}`, 11, '#b02a1a').setOrigin(1, 0));
     }
   }
 
@@ -677,16 +763,16 @@ export class ShiftScene extends Phaser.Scene {
   }
 
   /** Positions of the raw skewers on ticket `slot`'s plate (shared by drawing and hit-testing). */
-  private plateLayout(slot: number): { itemId: string; x: number; y: number; size: number }[] {
+  private plateLayout(slot: number): { itemId: string; x: number; y: number; size: number; hw: number; hh: number }[] {
     const c = this.shift.atTicket(slot);
     if (!c) return [];
     const ids: string[] = [];
     for (const l of c.order.lines) for (let k = this.shift.onPlate(slot, l.itemId); k > 0; k--) ids.push(l.itemId);
-    const big = ids.length <= 18;
-    const cols = big ? 6 : 8, dx = big ? 15 : 11.5, dy = big ? 12.5 : 11, size = big ? 15 : 11;
-    const x0 = cardX(slot) + CARD_W / 2 - ((Math.min(cols, ids.length) - 1) * dx) / 2;
-    const y0 = CARD_Y + 29 + (big ? 0 : -1);
-    return ids.map((itemId, k) => ({ itemId, x: x0 + (k % cols) * dx, y: y0 + Math.floor(k / cols) * dy, size }));
+    const m = ids.length;
+    const [cols, dx, dy, size] = m <= 10 ? [5, 18, 14, 14] : m <= 20 ? [10, 9.6, 13, 10] : [12, 8, 10, 9];
+    const x0 = cardX(slot) + CARD_W / 2 - ((Math.min(cols, m) - 1) * dx) / 2;
+    const y0 = CARD_Y + 30;
+    return ids.map((itemId, k) => ({ itemId, x: x0 + (k % cols) * dx, y: y0 + Math.floor(k / cols) * dy, size, hw: dx / 2 + 1, hh: dy / 2 + 1 }));
   }
 
   /** Raw skewer on a plate under the pointer. */
@@ -696,7 +782,7 @@ export class ShiftScene extends Phaser.Scene {
     let best: { slot: number; itemId: string } | null = null, bd = Infinity;
     for (const it of this.plateLayout(i)) {
       const d = (it.x - x) ** 2 + (it.y - y) ** 2;
-      if (d < bd && Math.abs(it.x - x) <= it.size * 0.75 + 2 && Math.abs(it.y - y) <= 8) { bd = d; best = { slot: i, itemId: it.itemId }; }
+      if (d < bd && Math.abs(it.x - x) <= it.hw && Math.abs(it.y - y) <= it.hh) { bd = d; best = { slot: i, itemId: it.itemId }; }
     }
     return best;
   }
@@ -898,7 +984,11 @@ export class ShiftScene extends Phaser.Scene {
       this.brushSkewer(i);
     } else {
       const sIdx = this.skewerAt(q.x, q.y);
-      if (sIdx >= 0) {
+      const coolerId = this.coolerItemAt(q.x, q.y);
+      if (coolerId) {
+        g.mode = 'ui';
+        g.ui = () => this.refillItem(coolerId);
+      } else if (sIdx >= 0) {
         g.mode = 'skewer';
         g.slot = sIdx;
       } else {

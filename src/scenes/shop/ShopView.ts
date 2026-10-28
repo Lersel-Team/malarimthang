@@ -14,7 +14,7 @@ import type { FrameName } from './people';
 export const SHOP_H = 250;
 
 export interface ShopViewOptions {
-  /** Number of seats (tables × chairs) to draw; 2 in Sprint 2. */
+  /** Number of seats (tables × 4 chairs) to draw. */
   seats: number;
   /** Text on the neon sign (default 'หม่าล่าริมทาง'). */
   shopName?: string;
@@ -30,21 +30,29 @@ export const TICKET_SPOTS = [
   { x: 254, y: 200 },
 ];
 export const QUEUE_SPOTS = Array.from({ length: MAX_QUEUE }, (_, i) => ({ x: 220 - 28 * i, y: 218 }));
+/** Up to 6 tables, 4 chairs each. */
 const TABLES = [
-  { x: 30, y: 174 },
-  { x: 92, y: 174 },
-  { x: 30, y: 200 },
-  { x: 92, y: 200 },
+  { x: 28, y: 202 },
+  { x: 84, y: 202 },
+  { x: 28, y: 172 },
+  { x: 84, y: 172 },
+  { x: 140, y: 202 },
+  { x: 140, y: 172 },
 ];
+export const CHAIRS_PER_TABLE = 4;
+/** Chairs: left, right, then two behind the table. `side` 1 = faces left. */
 export function seatSpot(i: number): { x: number; y: number; tx: number; ty: number; side: number } {
-  const t = TABLES[(i >> 1) % TABLES.length];
-  const side = i & 1;
-  return { x: t.x + (side ? 17 : -17), y: t.y, tx: t.x, ty: t.y, side };
+  const t = TABLES[Math.floor(i / CHAIRS_PER_TABLE) % TABLES.length];
+  const k = i % CHAIRS_PER_TABLE;
+  const dx = [-17, 17, -6, 6][k], dy = [0, 0, -9, -9][k];
+  return { x: t.x + dx, y: t.y + dy, tx: t.x, ty: t.y, side: k === 0 || k === 2 ? 0 : 1 };
 }
+/** Where waiters stand while idle (behind the queue, beside the counter). */
+export const WAITER_HOME = (i: number) => ({ x: 236 - 20 * i, y: 194 });
 const STREET_Y = 238;
 /** Waiting bench (Sprint 5 waiting area) and the shop cat, strip coords (feet baseline). */
 export const BENCH = { x: 174, y: 192 };
-const CAT = { x: 140, y: 193 };
+const CAT = { x: 164, y: 214 };
 
 interface Spr {
   id: number;
@@ -198,8 +206,8 @@ export class ShopView {
   }
 
   private buildFurniture() {
-    const n = Math.max(0, Math.min(8, this.opts.seats));
-    const tablesNeeded = Math.ceil(n / 2);
+    const n = Math.max(0, Math.min(TABLES.length * CHAIRS_PER_TABLE, this.opts.seats));
+    const tablesNeeded = Math.ceil(n / CHAIRS_PER_TABLE);
     for (let t = 0; t < tablesNeeded; t++) {
       const tb = TABLES[t];
       this.img('shop-table', tb.x, tb.y + 3, tb.y + 3, 0.5, 1);
@@ -291,10 +299,15 @@ export class ShopView {
         return { ...sp, speed: c.phase === 'walkIn' ? Phaser.Math.Clamp(d / Math.max(c.phaseT, 0.25), 45, 260) : 90 };
       }
       case 'ordered': {
+        if (c.seat !== null) {
+          const st = seatSpot(c.seat);
+          return { x: st.x, y: st.y, speed: 100 };
+        }
         const sp = TICKET_SPOTS[Math.min(c.ticketSlot ?? 0, MAX_TICKETS - 1)];
         return { ...sp, speed: 100 };
       }
       case 'toSeat':
+      case 'delivering':
       case 'eating':
       case 'bill': {
         const sp = seatSpot(c.seat ?? s.lastSeat ?? 0);
@@ -355,7 +368,50 @@ export class ShopView {
       s.bill?.setVisible(false);
       if (s.fade >= 1) this.killSpr(s), this.sprs.delete(id);
     }
+    this.updateWaiters(shift, dt);
     this.updateAmbient(dt);
+  }
+
+  private waiterSprs: { img: Phaser.GameObjects.Image; plate: Phaser.GameObjects.Text; x: number; y: number; wp: number; frame: string }[] = [];
+
+  /** Waiters carry the plate to the table, then walk back to their spot by the counter. */
+  private updateWaiters(shift: Shift, dt: number) {
+    while (this.waiterSprs.length < shift.waiters.length) {
+      const i = this.waiterSprs.length;
+      const fr = frameRef(this.scene, 'office', 2 + i, 'idle');
+      const img = this.own(this.scene.add.image(0, 0, fr.key, fr.frame).setOrigin(0.5, ORIGIN_Y).setScale(1 / RES));
+      const plate = this.own(this.scene.add.text(0, 0, '🍽', { fontSize: '12px' }).setOrigin(0.5, 1).setVisible(false));
+      const h = WAITER_HOME(i);
+      this.waiterSprs.push({ img, plate, x: h.x, y: h.y, wp: 0, frame: 'idle' });
+    }
+    shift.waiters.forEach((w, i) => {
+      const sp = this.waiterSprs[i];
+      const home = WAITER_HOME(i);
+      const cust = w.id === null ? null : shift.customers.find((c) => c.id === w.id);
+      let tx = home.x, ty = home.y, carry = false;
+      if (cust && cust.seat !== null) {
+        const seat = seatSpot(cust.seat);
+        const p = 1 - w.t / w.total;
+        carry = p < 0.5;
+        tx = seat.tx + (seat.side ? 22 : -22);
+        ty = seat.ty + 6;
+        if (!carry) { tx = home.x; ty = home.y; }
+      }
+      const d = Math.hypot(tx - sp.x, ty - sp.y);
+      const step = Math.min(d, 120 * dt);
+      if (d > 0.01) { sp.x += ((tx - sp.x) / d) * step; sp.y += ((ty - sp.y) / d) * step; sp.wp += step / 7; }
+      const moving = d - step > 0.6;
+      let frame: FrameName = 'idle';
+      if (moving) frame = walkFrame(sp.wp);
+      if (frame !== sp.frame) {
+        const fr = frameRef(this.scene, 'office', 2 + i, frame);
+        sp.img.setTexture(fr.key, fr.frame);
+        sp.frame = frame;
+      }
+      if (moving) sp.img.setFlipX(tx < sp.x);
+      sp.img.setPosition(this.x + sp.x, this.y + sp.y).setDepth(sp.y + 1);
+      sp.plate.setVisible(carry && cust !== null).setPosition(this.x + sp.x + (sp.img.flipX ? -8 : 8), this.y + sp.y - 20).setDepth(sp.y + 2);
+    });
   }
 
   private killSpr(s: Spr) {
@@ -380,11 +436,12 @@ export class ShopView {
     }
     s.moving = d - step > 0.6;
     if (s.moving && Math.abs(dx) > 1) s.faceLeft = dx < 0;
-    const seated = c.phase === 'eating' || c.phase === 'bill' || (c.phase === 'toSeat' && !s.moving);
+    const seated = c.phase === 'eating' || c.phase === 'bill' || c.phase === 'delivering' || ((c.phase === 'toSeat' || (c.phase === 'ordered' && c.seat !== null)) && !s.moving);
     if (seated && !s.moving) {
       const sp = seatSpot(c.seat ?? s.lastSeat ?? 0);
       s.faceLeft = sp.side === 1;
     } else if (!s.moving && (c.phase === 'ordered' || c.phase === 'queue')) s.faceLeft = false;
+    if (c.phase === 'ordered' && c.seat !== null && !s.moving) s.faceLeft = seatSpot(c.seat).side === 1;
     s.bobT += dt;
     s.happyT = Math.max(0, s.happyT - dt);
     s.angryT = Math.max(0, s.angryT - dt);

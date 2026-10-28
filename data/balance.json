@@ -4,7 +4,7 @@
     "lengthSec": 300,
     "clockStart": "18:00",
     "clockEnd": "24:00",
-    "startingMoney": 300,
+    "startingMoney": 800,
     "packSize": 10,
     "charcoalPerShift": 45,
     "coal": {
@@ -550,7 +550,7 @@
       "id": "soi",
       "th": "ปากซอยหน้าบ้าน",
       "rent": 40,
-      "customersPerMin": 2,
+      "customersPerMin": 2.5,
       "mix": {
         "student": 0.4,
         "office": 0.4,
@@ -563,7 +563,7 @@
       "id": "school",
       "th": "หน้าโรงเรียน",
       "rent": 80,
-      "customersPerMin": 3.5,
+      "customersPerMin": 4.38,
       "mix": {
         "student": 0.75,
         "family": 0.25
@@ -575,7 +575,7 @@
       "id": "nightmarket",
       "th": "ตลาดนัดกลางคืน",
       "rent": 180,
-      "customersPerMin": 4,
+      "customersPerMin": 5.0,
       "mix": {
         "office": 0.35,
         "family": 0.3,
@@ -589,7 +589,7 @@
       "id": "khaosan",
       "th": "ถนนข้าวสาร",
       "rent": 400,
-      "customersPerMin": 4.5,
+      "customersPerMin": 5.62,
       "mix": {
         "tourist": 0.55,
         "nightowl": 0.45
@@ -601,7 +601,7 @@
       "id": "yaowarat",
       "th": "เยาวราช",
       "rent": 600,
-      "customersPerMin": 5,
+      "customersPerMin": 6.25,
       "mix": {
         "tourist": 0.4,
         "office": 0.2,
@@ -618,13 +618,13 @@
       "th": "ขยายเตา (ราวย่าง)",
       "effect": "grillSlots",
       "values": [
-        8,
-        10,
         12,
         14,
+        16,
+        22,
         26,
-        30,
-        34,
+        32,
+        48,
         57
       ],
       "costs": [
@@ -676,6 +676,22 @@
       ]
     },
     {
+      "id": "fridgeSize",
+      "th": "ช่องเก็บในตู้เย็น",
+      "effect": "fridgeSlots",
+      "values": [
+        150,
+        240,
+        360,
+        540
+      ],
+      "costs": [
+        600,
+        1800,
+        5000
+      ]
+    },
+    {
       "id": "fridge",
       "th": "ตู้แช่",
       "effect": "overnightKeep",
@@ -714,19 +730,45 @@
     {
       "id": "tables",
       "th": "จำนวนโต๊ะ",
-      "effect": "seats",
+      "effect": "tables",
       "values": [
-        0,
         2,
+        3,
         4,
-        6,
-        8
+        5,
+        6
       ],
       "costs": [
-        300,
-        800,
-        2000,
-        4500
+        500,
+        1400,
+        3000,
+        6000
+      ],
+      "seatsPerTable": 4
+    },
+    {
+      "id": "waiter",
+      "th": "พนักงานเสิร์ฟ",
+      "effect": "waiters",
+      "values": [
+        1,
+        1,
+        2,
+        2,
+        3
+      ],
+      "tripSec": [
+        4,
+        3,
+        3,
+        2.2,
+        2
+      ],
+      "costs": [
+        1200,
+        3000,
+        7000,
+        15000
       ]
     },
     {
@@ -795,12 +837,12 @@
       "th": "ตู้โชว์ไม้",
       "effect": "boxSlots",
       "values": [
-        4,
-        5,
         6,
         8,
         10,
-        12
+        12,
+        14,
+        16
       ],
       "costs": [
         300,
@@ -815,10 +857,10 @@
       "th": "ถาดใหญ่",
       "effect": "trayCap",
       "values": [
-        10,
-        15,
-        20,
-        30
+        12,
+        18,
+        26,
+        40
       ],
       "costs": [
         400,
@@ -1123,16 +1165,6 @@
   },
   "grillTiers": [
     {
-      "cols": 8,
-      "rows": 1,
-      "scale": 0.8
-    },
-    {
-      "cols": 10,
-      "rows": 1,
-      "scale": 0.8
-    },
-    {
       "cols": 12,
       "rows": 1,
       "scale": 0.8
@@ -1143,19 +1175,29 @@
       "scale": 0.68
     },
     {
+      "cols": 16,
+      "rows": 1,
+      "scale": 0.6
+    },
+    {
+      "cols": 11,
+      "rows": 2,
+      "scale": 0.74
+    },
+    {
       "cols": 13,
       "rows": 2,
       "scale": 0.72
     },
     {
-      "cols": 15,
+      "cols": 16,
       "rows": 2,
-      "scale": 0.64
+      "scale": 0.6
     },
     {
-      "cols": 17,
-      "rows": 2,
-      "scale": 0.56
+      "cols": 16,
+      "rows": 3,
+      "scale": 0.49
     },
     {
       "cols": 19,

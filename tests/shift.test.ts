@@ -193,7 +193,7 @@ describe('queue and tickets', () => {
     expect(s.ledger.walkouts).toBe(1);
     expect(s.ledger.stars).toEqual([SERVICE.walkoutStars]);
     expect(s.comboSteps).toBe(0);
-    expect(s.atTicket(0)).toBeNull();
+    expect(c.ticketSlot).toBeNull(); // slot freed (another customer may already have taken it)
     const ev2 = s.tick(WALK_OUT_SEC + 0.3);
     expect(ev2).toContainEqual({ type: 'leave', id: c.id });
     expect(s.customers.find((x) => x.id === c.id)).toBeUndefined();

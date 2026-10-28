@@ -30,7 +30,7 @@ describe('newGame', () => {
     expect(g.unlockedLocations).toEqual(['soi']);
     expect(g.streak).toEqual({ count: 0, lastDate: null });
     for (const u of UPGRADES) expect(u.id in g.upgrades).toBe(true);
-    expect(g.upgrades.tables).toBe(1);
+    expect(g.upgrades.tables).toBe(0); // 2 tables to start
     expect(g.upgrades.grillSize).toBe(0);
   });
 });
@@ -88,7 +88,7 @@ describe('buyPacks', () => {
     const snap = JSON.stringify(g);
     const m = flatMarket(g, 2);
     const n = buyPacks(g, m, 'fishball', 2)!;
-    expect(n.money).toBe(300 - 2 * 10 * 2);
+    expect(n.money).toBe(SHIFT.startingMoney - 2 * 10 * 2);
     expect(n.stock.fishball).toBe(20);
     expect(n.bought!.fishball).toBe(2);
     expect(n.costBasis!.fishball).toBe(2);
@@ -112,12 +112,14 @@ describe('buyPacks', () => {
     expect(buyPacks(a, m, 'fishball', 2)).toBeNull();
     expect(buyPacks(a, m, 'fishball', 1)).not.toBeNull();
   });
-  it('storage cap 30, 50 with fridge', () => {
+  it('fridge slots cap the total stock, more with the fridge upgrade', () => {
     const m = flatMarket(newGame(), 1);
-    expect(buyPacks(withStock({ stock: { fishball: 10 } }), m, 'fishball', 3)).toBeNull();
-    expect(buyPacks(withStock({ stock: { fishball: 10 } }), m, 'fishball', 2)).not.toBeNull();
-    const f = withStock({ stock: { fishball: 20 }, upgrades: { ...newGame().upgrades, fridge: 1 } });
-    expect(buyPacks(f, m, 'fishball', 3)).not.toBeNull();
+    const cap = UPGRADES.find((u) => u.id === 'fridgeSize')!.values as number[];
+    const full = withStock({ stock: { enoki: cap[0] - 10 } });
+    expect(buyPacks(full, m, 'fishball', 1)).not.toBeNull();
+    expect(buyPacks(withStock({ stock: { enoki: cap[0] - 5 } }), m, 'fishball', 1)).toBeNull();
+    const f = withStock({ stock: { enoki: cap[0] - 5 }, upgrades: { ...newGame().upgrades, fridgeSize: 1 } });
+    expect(buyPacks(f, m, 'fishball', 1)).not.toBeNull();
   });
 });
 
@@ -129,9 +131,10 @@ describe('suggestRefill', () => {
     expect(Object.keys(r)[0]).toBe('enoki');
   });
   it('respects storage and bought', () => {
-    const g = withStock({ money: 1000, stock: { fishball: 20 }, bought: { enoki: 2 } });
+    const cap = UPGRADES.find((u) => u.id === 'fridgeSize')!.values[0] as number;
+    const g = withStock({ money: 1000, stock: { fishball: cap - 20 }, bought: { enoki: 2 } });
     const r = suggestRefill(g, flatMarket(g, 1), { fishball: 50, enoki: 50 });
-    expect(r).toEqual({ fishball: 1, enoki: 1 });
+    expect(r).toEqual({ fishball: 2 }); // 20 free slots: fishball gets both packs, enoki none
   });
   it('stops when money runs out, never negative', () => {
     const g = withStock({ money: 50 });
@@ -151,7 +154,7 @@ describe('endDay money/profit', () => {
     expect(summary).toMatchObject({ rent: 40, charcoal: CH, wages: 0 });
     expect(summary.spoilage).toBe(4); // 3 left, 1 kept, 2 rot at 2
     expect(summary.profit).toBeCloseTo(215 - 34 - 40 - CH - summary.spoilage, 5);
-    expect(state.money).toBe(300 + 215 - 40 - CH);
+    expect(state.money).toBe(SHIFT.startingMoney + 215 - 40 - CH);
     expect(state.day).toBe(2);
   });
   it('spoilage value is exact', () => {
@@ -166,7 +169,7 @@ describe('endDay money/profit', () => {
     const b = endDay(withStock({ upgrades: { ...base, grillType: 1, helper: 2 } }), res(), 'x').summary;
     expect(b.charcoal).toBe(CH);
     expect(b.wages).toBe(wage[2]);
-    expect(endDay(withStock({ upgrades: { ...base, helper: 2 } }), res(), 'x').state.money).toBe(300 - 40 - CH - wage[2]);
+    expect(endDay(withStock({ upgrades: { ...base, helper: 2 } }), res(), 'x').state.money).toBe(SHIFT.startingMoney - 40 - CH - wage[2]);
   });
   it('rent per location', () => {
     for (const l of LOCATIONS) {
@@ -221,7 +224,7 @@ describe('loan repay', () => {
     const { state, summary } = endDay(g, res({ sales }), 'x'); // profit 500
     expect(summary.loanRepaid).toBe(100);
     expect(state.loan).toBe(100);
-    expect(state.money).toBe(300 + sales - 40 - CH - 100);
+    expect(state.money).toBe(SHIFT.startingMoney + sales - 40 - CH - 100);
   });
   it('capped at loan, none on loss', () => {
     expect(endDay(withStock({ loan: 10 }), res({ sales: 540 + CH }), 'x').summary.loanRepaid).toBe(10);
