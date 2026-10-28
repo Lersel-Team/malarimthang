@@ -64,7 +64,9 @@
     "comboWindowSec": 6,
     "comboStep": 5,
     "comboCap": 40,
-    "autoCollectSec": 16
+    "autoCollectSec": 16,
+    "pickFirstSec": 1.2,
+    "pickSec": 1.1
   },
   "items": [
     {
@@ -863,6 +865,7 @@
       4,
       6
     ],
+    "patienceMult": 1.6,
     "extraOrderChance": 0.25,
     "tipBonus": 0.05,
     "noSeatWaitSec": 6,

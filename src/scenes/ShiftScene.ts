@@ -72,11 +72,12 @@ interface View {
   baseY: number;
 }
 interface Gesture {
-  mode: 'skewer' | 'cooler' | 'fan' | 'bottle' | 'ui' | 'pot' | 'brush';
+  mode: 'skewer' | 'plate' | 'fan' | 'bottle' | 'ui' | 'pot' | 'brush';
   sx: number;
   sy: number;
   slot: number;
   itemId?: string;
+  ghost?: Phaser.GameObjects.Image;
   ui?: () => void;
   kind?: BrushKind;
   done?: Set<number>;
@@ -205,6 +206,7 @@ export class ShiftScene extends Phaser.Scene {
       patienceMult: upgradeValue('seating', st.upgrades.seating ?? 0) || 1,
       spawnMult: upgradeValue('sign', st.upgrades.sign ?? 0) || 1,
       rng: Math.random,
+      stock: this.stock,
     });
     this.stats = { perfect: 0, ok: 0, burnt: 0, bin: 0 };
     this.waterMode = false;
@@ -242,7 +244,7 @@ export class ShiftScene extends Phaser.Scene {
     });
     this.refreshCards();
     this.refreshHud();
-    this.say('ทาน้ำมัน → พลิก → ทาซอส', 2600);
+    this.say('ลากไม้จากจานลูกค้าลงเตา → ปิ้ง → ลากใส่ถุง', 2600);
   }
 
   // ---- static drawing ----
@@ -251,16 +253,8 @@ export class ShiftScene extends Phaser.Scene {
   }
 
   private drawGrillFrame() {
-    const g = this.add.graphics().setDepth(0.5);
+    // one open grill: skewers go wherever there is room, no marked slots
     this.add.image(10, GRID_Y - 6, 'grill-body').setOrigin(0, 0).setDisplaySize(340, GRID_H + 12);
-    for (let i = 0; i < this.n; i++) {
-      const c = this.cell(i);
-      g.lineStyle(1, 0x4a4244, 1);
-      g.strokeRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2);
-      this.add
-        .text(c.x + 4, c.y + 2, String(i + 1), { fontFamily: FONT, fontSize: '10px', color: '#7a6a70' })
-        .setDepth(0);
-    }
   }
 
   /** Cell rect for cooler item i of n: <=4 big cards, <=8 two rows, else three rows of icons. */
@@ -307,10 +301,6 @@ export class ShiftScene extends Phaser.Scene {
       c.icon.setAlpha(left > 0 ? 1 : 0.28);
       c.count.setBackgroundColor(left > 0 ? '#c0302a' : '#4a4a52');
     }
-  }
-
-  private coolerItemAt(x: number, y: number): string | undefined {
-    return this.coolerCells.find((c) => inRect(c, x, y))?.id;
   }
 
   private drawBinAndBottle() {
@@ -498,7 +488,9 @@ export class ShiftScene extends Phaser.Scene {
   private cardSig(c: Customer | null): string {
     if (!c || !c.ticket) return 'empty';
     const filled = c.order.lines.map((l) => c.ticket!.skewers.filter((s) => s.itemId === l.itemId).length).join(',');
-    return `${c.id}|${filled}|${c.ticket.shakes}|${this.shift.isComplete(c.ticketSlot ?? 0)}`;
+    const t = c.ticket;
+    const plate = c.order.lines.map((l) => `${t.picked[l.itemId] ?? 0}.${t.grilled[l.itemId] ?? 0}`).join(',');
+    return `${c.id}|${filled}|${plate}|${t.shakes}|${this.shift.isComplete(c.ticketSlot ?? 0)}`;
   }
 
   private refreshCards(force = false) {
@@ -532,10 +524,16 @@ export class ShiftScene extends Phaser.Scene {
         const col = k % 2, row = Math.floor(k / 2);
         const lx = x + 8 + col * 50, ly = y + 22 + row * 20;
         const def = ITEM_BY_ID[l.itemId];
-        const ic = itemIcon(this, def.id, 26).setPosition(lx + 13, ly + 10).setDepth(5);
+        const onPlate = this.shift.onPlate(i, l.itemId);
+        const picked = c.ticket!.picked[l.itemId] ?? 0;
+        const ic = itemIcon(this, def.id, 26, 'raw').setPosition(lx + 13, ly + 10).setDepth(5).setAlpha(picked > 0 ? 1 : 0.3);
         card.content.push(ic);
         const full = have >= l.qty;
         card.content.push(this.txt(lx + 26, ly + 2, `${Math.min(have, l.qty)}/${l.qty}`, 13, full ? '#2f7a48' : '#3a2a20'));
+        if (onPlate > 0) {
+          // raw skewers waiting on the plate: drag to the grill
+          card.content.push(this.txt(lx + 20, ly - 2, String(onPlate), 11, '#fff').setBackgroundColor('#e0701a').setPadding(3, 0, 3, 0).setDepth(6));
+        }
       });
       const sp = c.order.spice;
       card.content.push(this.txt(x + 10, y + 62, sp === 0 ? 'ไม่เผ็ด' : '🌶'.repeat(sp), 12, '#b02a1a'));
@@ -547,7 +545,7 @@ export class ShiftScene extends Phaser.Scene {
         card.content.push(this.txt(x + SHAKER.dx + SHAKER.w + 4, by + 5, `${c.ticket.shakes}/${sp}`, 13, okShake ? '#2f7a48' : '#8a5a30'));
       }
       if (done) {
-        card.content.push(this.txt(x + CARD_W - 10, y + 9, 'ส่ง ▶', 13, '#b0580a').setOrigin(1, 0));
+        card.content.push(this.txt(x + CARD_W - 10, y + 9, 'แพ็ก/ส่ง ▶', 13, '#b0580a').setOrigin(1, 0));
       }
     }
   }
@@ -571,6 +569,19 @@ export class ShiftScene extends Phaser.Scene {
     if (y < CARD_Y || y > CARD_Y + CARD_H) return -1;
     for (let i = 0; i < MAX_TICKETS; i++) if (x >= cardX(i) && x <= cardX(i) + CARD_W) return i;
     return -1;
+  }
+
+  /** Ticket line under the pointer that still has raw skewers on the plate. */
+  private plateLineAt(x: number, y: number): { slot: number; itemId: string } | null {
+    const i = this.cardAt(x, y);
+    const c = i >= 0 ? this.shift.atTicket(i) : null;
+    if (!c) return null;
+    for (let k = 0; k < c.order.lines.length; k++) {
+      const lx = cardX(i) + 8 + (k % 2) * 50, ly = CARD_Y + 22 + Math.floor(k / 2) * 20;
+      const id = c.order.lines[k].itemId;
+      if (x >= lx && x <= lx + 48 && y >= ly - 2 && y <= ly + 20 && this.shift.onPlate(i, id) > 0) return { slot: i, itemId: id };
+    }
+    return null;
   }
 
   private shakeSlot(slot: number) {
@@ -754,8 +765,13 @@ export class ShiftScene extends Phaser.Scene {
     } else if (this.cardAt(q.x, q.y) >= 0) {
       const i = this.cardAt(q.x, q.y);
       const lx = q.x - cardX(i), ly = q.y - CARD_Y;
+      const line = this.plateLineAt(q.x, q.y);
       if (lx >= SHAKER.dx && lx <= SHAKER.dx + SHAKER.w && ly >= SHAKER.dy && ly <= SHAKER.dy + SHAKER.h) g.ui = () => this.shakeSlot(i);
-      else g.ui = () => this.serveSlot(i);
+      else if (line) {
+        g.mode = 'plate';
+        g.slot = line.slot;
+        g.itemId = line.itemId;
+      } else g.ui = () => this.serveSlot(i);
     } else if (inRect(WATER, q.x, q.y)) {
       g.mode = 'bottle';
     } else if (inRect(POT, q.x, q.y)) {
@@ -768,12 +784,8 @@ export class ShiftScene extends Phaser.Scene {
       g.done.add(i);
       this.brushSkewer(i);
     } else {
-      const itemId = this.coolerItemAt(q.x, q.y);
       const sIdx = this.skewerAt(q.x, q.y);
-      if (itemId) {
-        g.mode = 'cooler';
-        g.itemId = itemId;
-      } else if (sIdx >= 0) {
+      if (sIdx >= 0) {
         g.mode = 'skewer';
         g.slot = sIdx;
       } else {
@@ -805,6 +817,14 @@ export class ShiftScene extends Phaser.Scene {
     if (g.mode === 'fan') {
       const c = this.cellAt(q.x, q.y);
       if (c >= 0) g.slot = c;
+      return;
+    }
+    if (g.mode === 'plate' && g.itemId) {
+      if (!g.dragging && Phaser.Math.Distance.Between(q.x, q.y, g.sx, g.sy) > DRAG_PX) {
+        g.dragging = true;
+        g.ghost = itemIcon(this, g.itemId, 34, 'raw').setDepth(120);
+      }
+      g.ghost?.setPosition(q.x, q.y);
       return;
     }
     if (g.mode !== 'skewer') return;
@@ -844,8 +864,11 @@ export class ShiftScene extends Phaser.Scene {
           this.say(this.brushMode === 'oil' ? 'แปรงน้ำมัน: แตะหรือปัดผ่านไม้' : 'แปรงซอส: ทาเมื่อสุกทั้งสองด้าน', 1200);
         }
       }
-    } else if (g.mode === 'cooler') {
-      if (Phaser.Math.Distance.Between(q.x, q.y, g.sx, g.sy) <= DRAG_PX && g.itemId) this.placeItem(g.itemId);
+    } else if (g.mode === 'plate') {
+      g.ghost?.destroy();
+      if (!g.itemId) return;
+      if (!g.dragging) this.placeFromPlate(g.slot, g.itemId, null);
+      else if (q.y >= GRID_Y - 10 && q.y <= GRID_Y + GRID_H + 10 && q.x >= GRID_X - 6 && q.x <= GRID_X + GRID_W + 6) this.placeFromPlate(g.slot, g.itemId, q);
     } else if (g.mode === 'skewer') {
       const v = this.views[g.slot];
       if (!v) return;
@@ -880,6 +903,14 @@ export class ShiftScene extends Phaser.Scene {
       this.sfx.bin();
       this.stats.bin++;
       this.wasted[v.sk.itemId] = (this.wasted[v.sk.itemId] ?? 0) + 1;
+      // the customer whose plate it came from picks a replacement
+      for (let t = 0; t < MAX_TICKETS; t++) {
+        const tk = this.shift.atTicket(t)?.ticket;
+        if (tk && (tk.grilled[v.sk.itemId] ?? 0) > tk.skewers.filter((x) => x.itemId === v.sk.itemId).length) {
+          this.shift.replacePicked(t, v.sk.itemId);
+          break;
+        }
+      }
       this.destroyView(slot);
       this.refreshHud();
       return;
@@ -918,15 +949,20 @@ export class ShiftScene extends Phaser.Scene {
     this.removeFlame(slot);
   }
 
-  private placeItem(itemId: string) {
-    if ((this.stock[itemId] ?? 0) <= 0) return this.say('ของหมด!');
-    const slot = this.grill.slots.findIndex((s) => s === null);
+  /** Moves one raw skewer from a customer's plate to the grill: nearest free spot to `at`, else the first free one. */
+  private placeFromPlate(ticket: number, itemId: string, at: { x: number; y: number } | null) {
+    let slot = -1, best = Infinity;
+    for (let i = 0; i < this.n; i++) {
+      if (this.grill.slots[i]) continue;
+      const p = this.skPos(i);
+      const d = at ? Phaser.Math.Distance.Between(p.x, p.y, at.x, at.y) : i;
+      if (d < best) { best = d; slot = i; }
+    }
     if (slot < 0) return this.say('เตาเต็ม!');
-    if (placeSkewer(this.grill, slot, itemId)) {
-      this.sfx.place();
-      this.stock[itemId]--;
-      this.refreshCooler();
-    } else this.say('วางไม่ได้');
+    if (!this.shift.takeFromPlate(ticket, itemId)) return;
+    placeSkewer(this.grill, slot, itemId);
+    this.sfx.place();
+    this.refreshCards();
   }
 
   // ---- flames / fx ----
@@ -984,6 +1020,7 @@ export class ShiftScene extends Phaser.Scene {
     const fanSlot = fan ? fan.slot : null;
     if (!this.over) {
       this.pushEvents(this.shift.tick(dt));
+      this.refreshCooler();
     }
     this.shopView.update(dt, this.shift);
     this.refreshCards();

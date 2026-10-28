@@ -44,8 +44,15 @@ export interface TicketSkewer {
 }
 
 export interface Ticket {
+  /** Cooked skewers already packed in the customer's bag. */
   skewers: TicketSkewer[];
   shakes: number;
+  /** Raw skewers the customer has picked from the cooler onto their plate so far, per item. */
+  picked: Record<string, number>;
+  /** Skewers the player moved from the plate onto the grill, per item. */
+  grilled: Record<string, number>;
+  /** Seconds until the customer picks the next skewer. */
+  pickT: number;
 }
 
 export interface Customer {
@@ -91,6 +98,7 @@ export interface Ledger {
 
 export type ShiftEvent =
   | { type: 'arrive'; id: number }
+  | { type: 'pick'; id: number; itemId: string } // customer put a raw skewer on their plate
   | { type: 'toCounter'; id: number; ticketSlot: number }
   | { type: 'walkout'; id: number }
   | { type: 'served'; id: number; pay: number; tip: number; combo: number; stars: number; eatIn: boolean }
@@ -112,6 +120,8 @@ export interface ShiftOptions {
   patienceMult?: number; // seat grade
   spawnMult?: number; // sign
   rng: Rng;
+  /** Cooler stock per item; customers take from it as they pick (mutated in place). Omit for unlimited. */
+  stock?: Record<string, number>;
   /** Separate stream for cosmetic rolls (names) so they don't shift gameplay randomness. Default Math.random. */
   nameRng?: Rng;
 }
@@ -248,7 +258,7 @@ export class Shift {
     const lines = rollOrder(o.rng, arch, o.menu, size, this.pm);
     const spice = randint(o.rng, a.spice);
     const eatIn = o.rng() < (EAT_IN.rateByArchetype[arch] ?? 0);
-    const pMax = a.patienceSec * (o.patienceMult ?? 1);
+    const pMax = a.patienceSec * (o.patienceMult ?? 1) * (eatIn ? EAT_IN.patienceMult : 1);
     this.customers.push({
       ...nameFields(rollName(this.opts.nameRng ?? Math.random, arch)),
       id: this.nextId++, archetype: arch, order: { lines, spice, eatIn }, phase: 'walkIn',
@@ -266,7 +276,55 @@ export class Shift {
   private takeTicket(c: Customer, slot: number): void {
     c.phase = 'ordered';
     c.ticketSlot = slot;
-    c.ticket = { skewers: [], shakes: 0 };
+    c.ticket = { skewers: [], shakes: 0, picked: {}, grilled: {}, pickT: SERVICE.pickFirstSec };
+  }
+
+  /** Customers at the counter pick their own skewers from the cooler onto a plate, one at a time. */
+  private pickItems(c: Customer, dt: number, ev: ShiftEvent[]): void {
+    const t = c.ticket;
+    if (!t) return;
+    t.pickT -= dt;
+    while (t.pickT <= 0) {
+      const line = c.order.lines.find((l) => (t.picked[l.itemId] ?? 0) < l.qty);
+      if (!line) return;
+      const left = this.opts.stock ? (this.opts.stock[line.itemId] ?? 0) : Infinity;
+      if (left <= 0) {
+        // sold out: the customer settles for what they already have
+        line.qty = t.picked[line.itemId] ?? 0;
+        c.order.lines = c.order.lines.filter((l) => l.qty > 0);
+        if (c.order.lines.length === 0) { c.mood = 'sad'; this.startLeaving(c); return; }
+        continue;
+      }
+      if (this.opts.stock) this.opts.stock[line.itemId]--;
+      t.picked[line.itemId] = (t.picked[line.itemId] ?? 0) + 1;
+      t.pickT += SERVICE.pickSec;
+      ev.push({ type: 'pick', id: c.id, itemId: line.itemId });
+    }
+  }
+
+  /** Raw skewers of `itemId` on the customer's plate, ready to go on the grill. */
+  onPlate(slot: number, itemId: string): number {
+    const t = this.atTicket(slot)?.ticket;
+    if (!t) return 0;
+    const used = Math.max(t.grilled[itemId] ?? 0, t.skewers.filter((s) => s.itemId === itemId).length);
+    return Math.max(0, (t.picked[itemId] ?? 0) - used);
+  }
+
+  /** Player takes one raw skewer off the plate to grill it. False if none is there. */
+  takeFromPlate(slot: number, itemId: string): boolean {
+    if (this.onPlate(slot, itemId) <= 0) return false;
+    const t = this.atTicket(slot)!.ticket!;
+    t.grilled[itemId] = (t.grilled[itemId] ?? 0) + 1;
+    return true;
+  }
+
+  /** A grilled skewer was thrown away: the customer picks a replacement. */
+  replacePicked(slot: number, itemId: string): void {
+    const t = this.atTicket(slot)?.ticket;
+    if (!t || (t.grilled[itemId] ?? 0) <= 0) return;
+    t.grilled[itemId]--;
+    t.picked[itemId] = Math.max(0, (t.picked[itemId] ?? 0) - 1);
+    t.pickT = Math.min(t.pickT, 0);
   }
 
   private fillTickets(ev: ShiftEvent[]): void {
@@ -292,7 +350,8 @@ export class Shift {
   private stepCustomer(c: Customer, dt: number, ev: ShiftEvent[]): void {
     if (c.phase === 'queue' || c.phase === 'ordered') {
       c.patience = Math.max(0, c.patience - dt);
-      if (c.patience <= 0) {
+      if (c.phase === 'ordered') this.pickItems(c, dt, ev);
+      if ((c.phase as Phase) !== 'leaving' && c.patience <= 0) {
         if (c.bill > 0) this.money += c.billBase; // seated customer with a pending bill still pays
         this.startLeaving(c);
         c.mood = 'angry';

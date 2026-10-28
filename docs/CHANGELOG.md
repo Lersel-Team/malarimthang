@@ -1,5 +1,10 @@
 # Changelog
 
+## Self-service plates (2026-10-28)
+- The grill is one open surface (no numbered slots). Customers at the counter pick their own skewers from the cooler onto a plate (`service.pickFirstSec`/`pickSec`, stock drops as they pick; sold-out items shrink the order).
+- Player drags raw skewers from the ticket's plate onto the grill (tap = first free spot), grills them, drags cooked ones into the bag on the ticket, then taps to pack and send. A binned skewer is re-picked by the customer.
+- Seated (eat-in) customers wait `eatIn.patienceMult` (1.6x) longer.
+
 ## Sprint 4: Look, the graphics pass (2026-10-24)
 - Crisp hi-DPI canvas (RES x, up to 3x), bundled Kanit + Mali Thai fonts, palette + SVG sprite pipeline (`loadSvg`), subtle vignette, `docs/ART.md`.
 - Items: all 22 skewers as detailed SVG sprites with 5 cook stages, oil/sauce overlays; grill grate + coals, glass-front cooler, bin, bottle, brushes, shaker. Baked for Sprint 5: cup, bucket, display box, fry pan, batter bowl.

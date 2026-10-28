@@ -495,3 +495,44 @@ describe('full simulated shift with a bot', () => {
     });
   }
 });
+
+describe('self-service plate', () => {
+  it('customer picks the ordered skewers onto the plate over time, taking from stock', () => {
+    const stock = { fishball: 50, crabstick: 50, enoki: 50, porkbelly: 50 };
+    const { s, c } = atCounter(false, { stock });
+    const total = c.order.lines.reduce((n, l) => n + l.qty, 0);
+    expect(Object.values(c.ticket!.picked).reduce((a, b) => a + b, 0)).toBe(0);
+    for (let i = 0; i < 80; i++) s.tick(0.25);
+    expect(Object.values(c.ticket!.picked).reduce((a, b) => a + b, 0)).toBe(total);
+    const taken = s.customers.reduce((n, x) => n + Object.values(x.ticket?.picked ?? {}).reduce((a, b) => a + b, 0), 0);
+    expect(50 * 4 - Object.values(stock).reduce((a, b) => a + b, 0)).toBe(taken);
+  });
+  it('plate skewers can be taken once each, and a binned one is re-picked', () => {
+    const { s, c } = atCounter(false);
+    for (let i = 0; i < 80; i++) s.tick(0.25);
+    const id = c.order.lines[0].itemId;
+    const n = s.onPlate(c.ticketSlot!, id);
+    expect(n).toBe(c.order.lines[0].qty);
+    expect(s.takeFromPlate(c.ticketSlot!, id)).toBe(true);
+    expect(s.onPlate(c.ticketSlot!, id)).toBe(n - 1);
+    s.replacePicked(c.ticketSlot!, id);
+    for (let i = 0; i < 20; i++) s.tick(0.25);
+    expect(s.onPlate(c.ticketSlot!, id)).toBe(n);
+  });
+  it('sold-out items shrink the order; an empty order sends the customer away', () => {
+    const { s, c } = atCounter(false, { stock: { fishball: 0, crabstick: 0, enoki: 0, porkbelly: 0 } });
+    for (let i = 0; i < 8; i++) s.tick(0.25);
+    expect(s.customers.find((x) => x.id === c.id)?.phase ?? 'gone').toMatch(/leaving|gone/);
+  });
+  it('eat-in customers wait longer than takeaway ones', () => {
+    const arch = ARCHETYPES;
+    let eat = 0, take = 0;
+    for (let seed = 1; seed < 200 && (!eat || !take); seed++) {
+      const s = mk({}, seed);
+      const c = spawnOne(s);
+      const base = arch[c.archetype].patienceSec;
+      if (c.order.eatIn) eat = c.patienceMax / base; else take = c.patienceMax / base;
+    }
+    expect(eat).toBeGreaterThan(take);
+  });
+});
