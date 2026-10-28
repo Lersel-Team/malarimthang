@@ -3,7 +3,7 @@ import {
   Shift, repMult, patienceBand, rollOrder, MAX_TICKETS, MAX_QUEUE, WALK_IN_SEC, WALK_OUT_SEC,
   WALK_SEAT_SEC, type ShiftOptions, type Customer, type ShiftEvent,
 } from '../src/core/shift';
-import { ARCHETYPES, LOCATIONS, ITEM_BY_ID, SERVICE, EAT_IN, SHIFT } from '../src/data/balance';
+import { ARCHETYPES, LOCATIONS, ITEM_BY_ID, SERVICE, EAT_IN, SHIFT, SPICE } from '../src/data/balance';
 import type { Rng } from '../src/core/cooking';
 
 function mulberry32(a: number): Rng {
@@ -545,6 +545,24 @@ describe('self-service plate', () => {
     const ev: ShiftEvent[] = [];
     for (let i = 0; i < 4; i++) ev.push(...s.tick(0.25));
     expect(ev).toContainEqual({ type: 'returned', id: c.id, itemId: 'enoki', qty: 2 });
+  });
+  it('served event carries a quality report (percent, oil, sauce, charred, spice)', () => {
+    const { s, c } = atCounter(false);
+    const sp = c.order.spice;
+    let first = true;
+    for (const l of c.order.lines) for (let i = 0; i < l.qty; i++) { s.addSkewer(c.ticketSlot!, { itemId: l.itemId, quality: 0.8, oiled: true, sauce: first ? 'early' : 'good', charred: first }); first = false; }
+    for (let i = 0; i < sp; i++) s.shake(c.ticketSlot!);
+    const n = c.order.lines.reduce((a, l) => a + l.qty, 0);
+    const e = s.serve(c.ticketSlot!)[0] as Extract<ShiftEvent, { type: 'served' }>;
+    expect(e.report).toMatchObject({ percent: 80, count: n, oiled: n, sauced: n - 1, charred: 1, spiceOk: true, spiceGot: sp * SPICE.shakesPerLevel });
+  });
+  it('wrong spice lowers the reported percent', () => {
+    const { s, c } = atCounter(false);
+    for (const l of c.order.lines) for (let i = 0; i < l.qty; i++) s.addSkewer(c.ticketSlot!, { itemId: l.itemId, quality: 1 });
+    for (let i = 0; i < c.order.spice + 1; i++) s.shake(c.ticketSlot!);
+    const e = s.serve(c.ticketSlot!)[0] as Extract<ShiftEvent, { type: 'served' }>;
+    expect(e.report.spiceOk).toBe(false);
+    expect(e.report.percent).toBeLessThan(100);
   });
   it('eat-in customers wait longer than takeaway ones', () => {
     const arch = ARCHETYPES;

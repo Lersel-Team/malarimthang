@@ -42,6 +42,24 @@ export interface Order {
 export interface TicketSkewer {
   itemId: string;
   quality: number;
+  /** How it was cooked, for the quality report when served (all optional). */
+  oiled?: boolean;
+  sauce?: 'none' | 'good' | 'early';
+  /** A side came out charred. */
+  charred?: boolean;
+}
+
+/** What went into a served order, for the quality popup. */
+export interface QualityReport {
+  /** 0..100, cook quality with the spice penalty applied. */
+  percent: number;
+  count: number;
+  oiled: number;
+  sauced: number;
+  charred: number;
+  spiceWanted: number;
+  spiceGot: number;
+  spiceOk: boolean;
 }
 
 export interface Ticket {
@@ -107,7 +125,7 @@ export type ShiftEvent =
   | { type: 'toCounter'; id: number; ticketSlot: number }
   | { type: 'walkout'; id: number }
   | { type: 'returned'; id: number; itemId: string; qty: number } // raw skewers left on the plate of a customer who walked out
-  | { type: 'served'; id: number; pay: number; tip: number; combo: number; stars: number; eatIn: boolean }
+  | { type: 'served'; id: number; pay: number; tip: number; combo: number; stars: number; eatIn: boolean; report: QualityReport }
   | { type: 'toSeat'; id: number; seat: number }
   | { type: 'sit'; id: number; seat: number } // eat-in customer took a table while their order is being grilled
   | { type: 'delivered'; id: number }
@@ -558,7 +576,17 @@ export class Shift {
     c.ticketSlot = null;
     c.ticket = null;
     const total = base + tip + combo;
-    const sv: ShiftEvent = { type: 'served', id: c.id, pay: base, tip, combo, stars, eatIn: eat && (c.isExtra || seat >= 0) };
+    const report: QualityReport = {
+      percent: Math.round(q * (wrong ? 1 - SPICE.wrongSpicePenalty : 1) * 100),
+      count: t.skewers.length,
+      oiled: t.skewers.filter((k) => k.oiled).length,
+      sauced: t.skewers.filter((k) => k.sauce === 'good').length,
+      charred: t.skewers.filter((k) => k.charred).length,
+      spiceWanted: c.order.spice * SPICE.shakesPerLevel,
+      spiceGot: t.shakes,
+      spiceOk: !wrong,
+    };
+    const sv: ShiftEvent = { type: 'served', id: c.id, pay: base, tip, combo, stars, eatIn: eat && (c.isExtra || seat >= 0), report };
     if (c.isExtra) {
       c.bill += total;
       c.billBase += base;

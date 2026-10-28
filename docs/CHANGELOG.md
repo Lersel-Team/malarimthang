@@ -1,5 +1,8 @@
 # Changelog
 
+## Quality report (2026-10-28)
+- Serving an order pops a report over the ticket: quality % (cook quality x spice penalty), oiled n/N, sauced n/N, charred count, spice right/wrong and the stars. The numbers come from `served.report` in the shift model.
+
 ## Walk-out returns (2026-10-28)
 - When a customer's patience runs out, the raw skewers still on their plate go back to the fridge, but each has a `service.returnSpoilChance` (30%) of spoiling from the handling (counted as wasted). Skewers already on the grill are unaffected.
 

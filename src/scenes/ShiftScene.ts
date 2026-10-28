@@ -24,7 +24,7 @@ import {
   type Skewer,
 } from '../core/cooking';
 import { Sfx } from '../audio/sfx';
-import { MAX_TICKETS, Shift, type Customer, type ShiftEvent } from '../core/shift';
+import { MAX_TICKETS, Shift, type Customer, type QualityReport, type ShiftEvent } from '../core/shift';
 import { SHOP_H, ShopView } from './shop/ShopView';
 import { BODY_H, FONT, cookStages, drawIndicators, mix } from './grill/draw';
 import { SkewerSprite, drawSkewerSprite, itemIcon } from '../art/items';
@@ -801,11 +801,39 @@ export class ShiftScene extends Phaser.Scene {
     const events = this.shift.serve(slot);
     this.pushEvents(events);
     this.sfx.coin();
-    if (!eatIn) {
-      const e = events.find((ev) => ev.type === 'served');
-      if (e && e.type === 'served') this.floatText(cardX(slot) + CARD_W / 2, CARD_Y + 20, `+฿${Math.round(e.pay + e.tip + e.combo)}`, '#ffe27a');
+    const e = events.find((ev) => ev.type === 'served');
+    if (e && e.type === 'served') {
+      if (!eatIn) this.floatText(cardX(slot) + CARD_W / 2, CARD_Y + 20, `+฿${Math.round(e.pay + e.tip + e.combo)}`, '#ffe27a');
+      this.showQuality(slot, e.report, e.stars);
     }
     this.refreshCards();
+  }
+
+  /** Quality report card over the ticket that was just served: percent, oil, sauce, burnt, spice. */
+  private showQuality(slot: number, r: QualityReport, stars: number) {
+    const x = cardX(slot), y = CARD_Y + 34;
+    const col = r.percent >= 85 ? 0x3f9a62 : r.percent >= 60 ? 0xd9a21b : 0xd6342b;
+    const c = this.add.container(x + CARD_W / 2, y).setDepth(200);
+    const bg = this.add.graphics();
+    bg.fillStyle(0x1b1230, 0.94);
+    bg.fillRoundedRect(-52, 0, 104, 78, 10);
+    bg.lineStyle(2, col, 1);
+    bg.strokeRoundedRect(-52, 0, 104, 78, 10);
+    c.add(bg);
+    const t = (px: number, py: number, str: string, size: number, color: string, o = 0.5) =>
+      this.add.text(px, py, str, { fontFamily: FONT, fontSize: `${size}px`, color }).setOrigin(o, 0);
+    c.add(t(0, 3, `คุณภาพ ${r.percent}%`, 17, `#${col.toString(16).padStart(6, '0')}`));
+    const ok = '#8fe0a8', bad = '#ff9a8a';
+    const row = (py: number, label: string, got: number, ofN: number) =>
+      c.add(t(-46, py, `${label} ${got}/${ofN}`, 11, got >= ofN ? ok : bad, 0));
+    row(25, 'ทาน้ำมัน', r.oiled, r.count);
+    row(38, 'ทาซอส', r.sauced, r.count);
+    c.add(t(-46, 51, r.charred > 0 ? `ไหม้ ${r.charred}` : 'ไม่ไหม้', 11, r.charred > 0 ? bad : ok, 0));
+    c.add(t(-46, 64, r.spiceOk ? 'เผ็ดตรงใจ ✓' : `เผ็ดไม่ตรง ${r.spiceGot}/${r.spiceWanted}`, 11, r.spiceOk ? ok : bad, 0));
+    c.add(t(46, 51, '★'.repeat(stars), 11, '#ffd24a', 1));
+    c.setScale(0.6).setAlpha(0);
+    this.tweens.add({ targets: c, scale: 1, alpha: 1, duration: 160, ease: 'Back.Out' });
+    this.tweens.add({ targets: c, alpha: 0, y: y - 12, delay: 2300, duration: 500, onComplete: () => c.destroy() });
   }
 
   private floatText(x: number, y: number, s: string, color: string) {
@@ -1168,7 +1196,8 @@ export class ShiftScene extends Phaser.Scene {
       }
       removeSkewer(this.grill, slot);
       this.destroyView(slot);
-      this.shift.addSkewer(slotT, { itemId, quality: q });
+      const zs = [sideZone(v.sk.sides[0], item(v.sk), effectiveMargin(v.sk)), sideZone(v.sk.sides[1], item(v.sk), effectiveMargin(v.sk))];
+      this.shift.addSkewer(slotT, { itemId, quality: q, oiled: v.sk.oiled, sauce: v.sk.sauce, charred: zs.includes('charred') });
       this.sfx.place();
       this.stats[this.qualityLabel(q)]++;
       this.sold[itemId] = (this.sold[itemId] ?? 0) + 1;
