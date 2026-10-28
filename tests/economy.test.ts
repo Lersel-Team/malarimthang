@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newGame, createMarket, buyPacks, suggestRefill, endDay, takeLoan, xpForLevel, type GameState, type ShiftResult, type Market } from '../src/core/economy';
+import { newGame, createMarket, buyPacks, packPrice, bulkOff, suggestRefill, endDay, takeLoan, xpForLevel, type GameState, type ShiftResult, type Market } from '../src/core/economy';
 import type { Rng } from '../src/core/cooking';
 import { ITEM_BY_ID, SHIFT, MARKET, LOCATIONS, UPGRADES } from '../src/data/balance';
 const CH = SHIFT.charcoalPerShift;
@@ -58,10 +58,10 @@ describe('createMarket', () => {
       expect(d.unitCost).toBeLessThanOrEqual(lim(d.itemId, MARKET.dailyDeal.dearMult, j) + 0.25);
     }
   });
-  it('rounds to 0.5 with min 1, and maxPacks 3', () => {
+  it('rounds to 0.5 with min 1, and maxPacks from balance', () => {
     for (let seed = 1; seed < 30; seed++) {
       const m = createMarket(newGame(), mulberry32(seed));
-      expect(m.maxPacks).toBe(3);
+      expect(m.maxPacks).toBe(MARKET.maxPacks);
       expect(m.packSize).toBe(SHIFT.packSize);
       for (const o of m.offers) {
         expect(o.unitCost * 2).toBe(Math.round(o.unitCost * 2));
@@ -310,5 +310,26 @@ describe('takeLoan', () => {
   it('not within 3 days of last loan', () => {
     expect(takeLoan(poor({ day: 7, loanDay: 5 }))).toBeNull();
     expect(takeLoan(poor({ day: 8, loanDay: 5 }))).not.toBeNull();
+  });
+});
+
+describe('bulk buying', () => {
+  it('later packs of the same item get a volume discount', () => {
+    const g = withStock({ money: 5000 });
+    const m = { ...flatMarket(g, 4), maxPacks: MARKET.maxPacks };
+    expect(bulkOff(1)).toBe(0);
+    expect(bulkOff(5)).toBeGreaterThan(0);
+    expect(bulkOff(9)).toBeGreaterThan(bulkOff(5));
+    expect(packPrice(m, 'fishball', 1)).toBe(40);
+    expect(packPrice(m, 'fishball', 9)).toBeLessThan(packPrice(m, 'fishball', 5));
+    const a = buyPacks(g, m, 'fishball', 8)!;
+    const plain = 8 * 40;
+    expect(g.money - a.money).toBeLessThan(plain);
+  });
+  it('can buy a whole day of stock in one visit within the fridge slots', () => {
+    let g = withStock({ money: 5000 });
+    const m = { ...flatMarket(g, 1), maxPacks: MARKET.maxPacks };
+    for (let i = 0; i < 12; i++) g = buyPacks(g, m, 'fishball', 1) ?? g;
+    expect(g.stock.fishball).toBe(120);
   });
 });

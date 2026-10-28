@@ -1003,7 +1003,18 @@
       "seafood": 1,
       "processed": 3,
       "veg": 2
-    }
+    },
+    "maxPacks": 12,
+    "bulkTiers": [
+      {
+        "fromPack": 5,
+        "off": 0.05
+      },
+      {
+        "fromPack": 9,
+        "off": 0.1
+      }
+    ]
   },
   "fry": {
     "batterSec": 1.0,

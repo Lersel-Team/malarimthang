@@ -1,5 +1,9 @@
 # Changelog
 
+## Spare grilling and bulk buying (2026-10-28)
+- Drag any item from the display bar onto the grill to grill a spare (replace a burnt skewer or a mix-up); tap still refills from the fridge. Spares can be packed into any ticket that needs that item.
+- Market: up to 12 packs per item per day (was 3), "+5" quick-buy button, volume discount (5% from the 5th pack, 10% from the 9th). Fridge slots and cash are the real limit.
+
 ## Waiters, tables, fridge (2026-10-28)
 - Tables seat 4 (2 tables = 8 seats to start, up to 6). Eat-in customers take a table as soon as their order is on the plate and wait there (longer patience); the grilled order goes on a plate, a waiter carries it to the table, then they eat. Takeaway orders go in a bag. Waiter upgrade: count and trip time (`waiter`).
 - Tickets redrawn: raw tray, bag (takeaway) or plate (eat-in) that fills as you drop skewers in, shaker row.

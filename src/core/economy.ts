@@ -32,7 +32,8 @@ export interface GameState {
   loanDay?: number;
 }
 
-export const MAX_PACKS = 3;
+/** Max packs per item per day (balance.json → market.maxPacks); the fridge slots and your cash are the real limit. */
+export const MAX_PACKS = MARKET.maxPacks;
 /** Share of over-capacity veg/processed stock that survives the night (simplification of the 2/3-night rule). */
 export const KEEP_SHARE = 0.4;
 
@@ -75,7 +76,7 @@ export interface Market {
   day: number;
   offers: MarketOffer[]; // unlocked items only
   packSize: number; // SHIFT.packSize
-  /** Max packs per item per day (3). */
+  /** Max packs per item per day. */
   maxPacks: number;
 }
 
@@ -100,6 +101,19 @@ export function createMarket(state: GameState, rng: Rng): Market {
   return { day: state.day, offers, packSize: SHIFT.packSize, maxPacks: MAX_PACKS };
 }
 
+/** Volume discount for the `nth` (1-based) pack of one item bought on the same day (market.bulkTiers). */
+export function bulkOff(nth: number): number {
+  let off = 0;
+  for (const t of MARKET.bulkTiers) if (nth >= t.fromPack) off = t.off;
+  return off;
+}
+
+/** Price of the `nth` (1-based) pack of an item today, after the volume discount. */
+export function packPrice(market: Market, itemId: string, nth: number): number {
+  const o = market.offers.find((x) => x.itemId === itemId);
+  return o ? Math.round(o.unitCost * market.packSize * (1 - bulkOff(nth))) : 0;
+}
+
 /** Buys `packs` packs. Returns the new state or null if not enough money / over maxPacks / storage cap. */
 export function buyPacks(state: GameState, market: Market, itemId: string, packs: number): GameState | null {
   const offer = market.offers.find((o) => o.itemId === itemId);
@@ -109,9 +123,10 @@ export function buyPacks(state: GameState, market: Market, itemId: string, packs
   const skewers = packs * market.packSize;
   const have = state.stock[itemId] ?? 0;
   if (stockTotal(state) + skewers > storageCap(state)) return null;
-  const cost = offer.unitCost * skewers;
+  let cost = 0;
+  for (let n = done + 1; n <= done + packs; n++) cost += packPrice(market, itemId, n);
   if (cost > state.money) return null;
-  const avg = (have * basis(state, itemId) + skewers * offer.unitCost) / (have + skewers);
+  const avg = (have * basis(state, itemId) + cost) / (have + skewers);
   return {
     ...state,
     money: state.money - cost,
@@ -133,11 +148,13 @@ export function suggestRefill(state: GameState, market: Market, soldYesterday: R
     let packs = Math.ceil((soldYesterday[id] * MARKET.refillYesterdayMult) / market.packSize);
     packs = Math.min(packs, market.maxPacks - (state.bought?.[id] ?? 0));
     packs = Math.min(packs, Math.floor(free / market.packSize));
-    packs = Math.min(packs, Math.floor(money / (offer.unitCost * market.packSize)));
+    const done = state.bought?.[id] ?? 0;
+    const price = (n: number) => { let c = 0; for (let k = done + 1; k <= done + n; k++) c += packPrice(market, id, k); return c; };
+    while (packs > 0 && price(packs) > money) packs--;
     if (packs <= 0) continue;
     out[id] = packs;
     free -= packs * market.packSize;
-    money -= packs * offer.unitCost * market.packSize;
+    money -= price(packs);
   }
   return out;
 }

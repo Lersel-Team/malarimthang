@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { pt, setupCamera } from '../engine/hidpi';
 import { GAME_H, GAME_W } from '../config';
-import { buyPacks, createMarket, suggestRefill, takeLoan, type GameState, type Market } from '../core/economy';
+import { bulkOff, buyPacks, createMarket, packPrice, suggestRefill, takeLoan, type GameState, type Market } from '../core/economy';
 import { ITEM_BY_ID } from '../data/balance';
 import { mulberry32, session } from '../session';
 import { renameShop } from './nameInput';
@@ -266,7 +266,7 @@ export class MarketScene extends Phaser.Scene {
       objs.push(minus, plus, count, cap, pack, full);
       this.list.add(objs);
       this.rows.push({ itemId: o.itemId, minus, plus, count, cap, pack, stock, full });
-      const packCost = o.unitCost * this.market.packSize;
+      const packCost = packPrice(this.market, o.itemId, (this.st.bought?.[o.itemId] ?? 0) + 1);
       this.hits.push({
         x: cx - 66, y: y + 2, w: 48, h: 50,
         fn: () => {
@@ -276,12 +276,24 @@ export class MarketScene extends Phaser.Scene {
           this.renderAll();
         },
       });
+      const buy5 = uiButton(this, cx + 42, y + 56, 40, 16, '+5', { variant: 'secondary', interactive: false });
+      objs.push(buy5);
       this.hits.push({
-        x: cx + 18, y: y + 2, w: 48, h: 50,
+        x: cx + 18, y: y + 44, w: 48, h: 22,
+        fn: () => {
+          buy5.press();
+          let n = 0;
+          while (n < 5 && this.buy(o.itemId)) n++;
+          if (n === 0) toastAt(this, GAME_W / 2, 530, this.st.money < packCost ? 'เงินไม่พอ' : (this.st.bought?.[o.itemId] ?? 0) >= this.maxPacks() ? `ซื้อได้วันละ ${this.maxPacks()} แพ็คต่อชนิด` : 'ช่องในตู้เย็นเต็ม', 'close');
+          this.renderAll();
+        },
+      });
+      this.hits.push({
+        x: cx + 18, y: y + 2, w: 48, h: 42,
         fn: () => {
           plus.press();
           if (!this.buy(o.itemId)) {
-            const why = this.st.money < packCost ? 'เงินไม่พอ' : (this.st.bought?.[o.itemId] ?? 0) >= this.maxPacks() ? 'ซื้อได้วันละ 3 แพ็คต่อชนิด' : 'ที่เก็บของเต็ม';
+            const why = this.st.money < packCost ? 'เงินไม่พอ' : (this.st.bought?.[o.itemId] ?? 0) >= this.maxPacks() ? `ซื้อได้วันละ ${this.maxPacks()} แพ็คต่อชนิด` : 'ที่เก็บของเต็ม';
             toastAt(this, GAME_W / 2, 530, why, 'close');
           }
           this.renderAll();
@@ -294,13 +306,14 @@ export class MarketScene extends Phaser.Scene {
   private updateRows() {
     const s = this.st;
     for (const r of this.rows) {
-      const o = this.market.offers.find((x) => x.itemId === r.itemId)!;
       const have = s.stock[r.itemId] ?? 0;
       const cnt = s.bought?.[r.itemId] ?? 0;
       const full = cnt >= this.maxPacks();
       r.stock.setText(have > 0 ? `มี ${have} ไม้` : 'ยังไม่มี').setColor(have > 0 ? '#256b40' : T.color.paperDim);
       r.count.setText(`${cnt}`);
-      r.pack.setText(`แพ็ค ${this.market.packSize} · ${baht(o.unitCost * this.market.packSize)}`).setVisible(!full);
+      const next = cnt + 1;
+      const off = bulkOff(next);
+      r.pack.setText(`แพ็ค ${this.market.packSize} · ${baht(packPrice(this.market, r.itemId, next))}${off > 0 ? ` (-${Math.round(off * 100)}%)` : ''}`).setVisible(!full);
       r.full.setVisible(full);
       r.minus.setEnabled((this.bought[r.itemId]?.length ?? 0) > 0);
       r.plus.setEnabled(!full);

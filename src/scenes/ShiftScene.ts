@@ -75,7 +75,7 @@ interface View {
   baseY: number;
 }
 interface Gesture {
-  mode: 'skewer' | 'plate' | 'fan' | 'bottle' | 'ui' | 'pot' | 'brush';
+  mode: 'skewer' | 'plate' | 'cooler' | 'fan' | 'bottle' | 'ui' | 'pot' | 'brush';
   sx: number;
   sy: number;
   slot: number;
@@ -390,7 +390,7 @@ export class ShiftScene extends Phaser.Scene {
   private drawCooler() {
     this.add.image(COOLER.x, COOLER.y, 'cooler-body').setOrigin(0, 0).setDisplaySize(COOLER.w, COOLER.h);
     this.add.image(COOLER.x + 5, COOLER.y + 22, 'cooler-glass').setOrigin(0, 0).setDisplaySize(COOLER.w - 10, COOLER.h - 27).setDepth(1);
-    this.add.text(COOLER.x + 10, COOLER.y + 3, 'ตู้โชว์ · แตะเพื่อเติม', { fontFamily: FONT, fontSize: '13px', color: '#10222a' });
+    this.add.text(COOLER.x + 10, COOLER.y + 3, 'ตู้โชว์ · แตะ=เติม ลาก=ย่างเพิ่ม', { fontFamily: FONT, fontSize: '11px', color: '#10222a' });
     this.coolerCells = [];
     const ids = this.menu.slice(0, 18);
     ids.forEach((id, i) => {
@@ -986,8 +986,8 @@ export class ShiftScene extends Phaser.Scene {
       const sIdx = this.skewerAt(q.x, q.y);
       const coolerId = this.coolerItemAt(q.x, q.y);
       if (coolerId) {
-        g.mode = 'ui';
-        g.ui = () => this.refillItem(coolerId);
+        g.mode = 'cooler';
+        g.itemId = coolerId;
       } else if (sIdx >= 0) {
         g.mode = 'skewer';
         g.slot = sIdx;
@@ -1029,6 +1029,14 @@ export class ShiftScene extends Phaser.Scene {
     if (g.mode === 'fan') {
       this.fanPos.x = q.x;
       this.fanPos.y = q.y;
+      return;
+    }
+    if (g.mode === 'cooler' && g.itemId) {
+      if (!g.dragging && Phaser.Math.Distance.Between(q.x, q.y, g.sx, g.sy) > DRAG_PX) {
+        g.dragging = true;
+        g.ghost = itemIcon(this, g.itemId, 34, 'raw').setDepth(120);
+      }
+      g.ghost?.setPosition(q.x, q.y);
       return;
     }
     if (g.mode === 'plate' && g.itemId) {
@@ -1078,6 +1086,11 @@ export class ShiftScene extends Phaser.Scene {
           this.say(this.brushMode === 'oil' ? 'แปรงน้ำมัน: แตะหรือปัดผ่านไม้' : 'แปรงซอส: ทาเมื่อสุกทั้งสองด้าน', 1200);
         }
       }
+    } else if (g.mode === 'cooler') {
+      g.ghost?.destroy();
+      if (!g.itemId) return;
+      if (!g.dragging) this.refillItem(g.itemId);
+      else if (this.inGrill(q.x, q.y, 14)) this.placeSpare(g.itemId, q);
     } else if (g.mode === 'plate') {
       g.ghost?.destroy();
       if (!g.itemId) return;
@@ -1175,6 +1188,20 @@ export class ShiftScene extends Phaser.Scene {
     this.views[slot] = null;
     this.pos[slot] = null;
     this.removeFlame(slot);
+  }
+
+  /** Grills a spare skewer straight from the bar (a replacement for a burnt one or a mix-up). */
+  private placeSpare(itemId: string, at: { x: number; y: number }) {
+    if ((this.display[itemId] ?? 0) <= 0) return this.say('ถาดหมด แตะเพื่อเติมก่อน');
+    const slot = this.grill.slots.findIndex((x) => x === null);
+    const spot = slot < 0 ? null : this.findSpot(at);
+    if (!spot) return this.say('เตาเต็ม!');
+    this.display[itemId]--;
+    this.pos[slot] = spot;
+    this.grill.heat[slot] = this.heatAt(spot.x, spot.y);
+    placeSkewer(this.grill, slot, itemId);
+    this.sfx.place();
+    this.refreshCooler();
   }
 
   /** Moves one raw skewer from a customer's plate to the grill: nearest free spot to `at`, else the first free one. */
