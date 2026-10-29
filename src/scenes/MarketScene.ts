@@ -6,6 +6,8 @@ import { ITEM_BY_ID } from '../data/balance';
 import { mulberry32, session } from '../session';
 import { renameShop } from './nameInput';
 import { baht, toastAt } from './ui';
+import { showTutorial } from './tutorial';
+import { settings } from '../settings';
 import {
   fitText, marketWall, uiButton, uiCounter, uiFadeIn, uiGoto, uiIcon, uiItemPic, uiMoney, uiPanel, uiPill, uiRibbon, uiShadow, uiTheme,
   type Backdrop, type UiButton, type UiMoney, type UiPill,
@@ -105,7 +107,9 @@ export class MarketScene extends Phaser.Scene {
     this.dayPill = uiPill(this, 0, 60, '', { icon: 'clock', anchor: 'left', h: 26 });
     this.lvlPill = uiPill(this, 0, 60, '', { icon: 'level', kind: 'lamp', anchor: 'left', h: 26 });
     this.ratePill = uiPill(this, 0, 60, '', { icon: 'star', kind: 'cream', anchor: 'left', h: 26 });
-    this.add.text(346, 60, 'ตลาดเช้า', { ...T.text.small, fontFamily: T.text.heading.fontFamily, fontStyle: 'bold', color: '#ffd9a0', stroke: '#2a1608', strokeThickness: 3 }).setOrigin(1, 0.5);
+
+    uiButton(this, 332, 62, 44, 44, '?', { variant: 'secondary', fontSize: 20, onClick: () => this.help() });
+    if (!settings.tutorialSeen) this.time.delayedCall(450, () => this.help());
 
     this.input.on('pointerdown', this.onDown, this);
     this.input.on('pointermove', this.onMove, this);
@@ -126,6 +130,12 @@ export class MarketScene extends Phaser.Scene {
   }
   private totalStock() {
     return Object.values(this.st.stock).reduce((a, b) => a + (b || 0), 0);
+  }
+
+  private help() {
+    if (this.modal) return;
+    this.modal = true;
+    showTutorial(this, () => (this.modal = false));
   }
 
   private rename() {
