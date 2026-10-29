@@ -25,6 +25,7 @@ import {
 } from '../core/cooking';
 import { Sfx } from '../audio/sfx';
 import { MAX_TICKETS, Shift, type Customer, type QualityReport, type ShiftEvent } from '../core/shift';
+import { INPUT_SPEED } from '../settings';
 import { SHOP_H, ShopView } from './shop/ShopView';
 import { BODY_H, FONT, cookStages, drawIndicators, mix } from './grill/draw';
 import { SkewerSprite, drawSkewerSprite, itemIcon } from '../art/items';
@@ -1306,7 +1307,7 @@ export class ShiftScene extends Phaser.Scene {
 
   // ---- loop ----
   update(time: number, deltaMs: number) {
-    const dt = this.paused ? 0 : Math.min(deltaMs / 1000, 0.1) * DEV_SPEED;
+    const dt = this.paused ? 0 : Math.min(deltaMs / 1000, 0.1) * DEV_SPEED * INPUT_SPEED;
     const fan = this.over ? undefined : [...this.gestures.values()].find((g) => g.mode === 'fan');
     const fanSlots = new Set<number>();
     if (fan) for (let i = 0; i < this.n; i++) {
